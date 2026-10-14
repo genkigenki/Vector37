@@ -73,8 +73,8 @@ static void bowed(const int16_t *a, const int16_t *b, int32_t t, int32_t bow, in
 static void fam_xy(uint32_t f, const opar_t *o, uint32_t p, int32_t *x, int32_t *y)
 {
     switch (f) {
-    case SH_STAR: {                    /* MORPH: 3 .. 8 points, WARP X: rose .. polygon, WARP Y: depth (a star) */
-        int32_t n8 = steps25(o->mo, 3, 8), fr = n8 & 255, s = unit(o->wx), d = (unit(o->wy) * 26214) >> 15, r;
+    case SH_STAR: {                    /* MORPH: 3 .. 8 points, WARP X: rose .. polygon, WARP Y: depth (a star; at least 0.2) */
+        int32_t n8 = steps25(o->mo, 3, 8), fr = n8 & 255, s = unit(o->wx), d = 6554 + ((unit(o->wy) * 19660) >> 15), r;   /* depth 0.2 .. 0.8: never a plain circle */
         uint32_t n0 = (uint32_t)n8 >> 8;
         r = star_r(n0, p, s, d);
         if (fr)
@@ -82,8 +82,8 @@ static void fam_xy(uint32_t f, const opar_t *o, uint32_t p, int32_t *x, int32_t 
         *x = (r * sinq(p)) >> 15, *y = -((r * cosq(p)) >> 15);
         return;
     }
-    case SH_SPIRO: {                   /* MORPH: 1 .. 6 loops (an epicycle), WARP Y: their size, WARP X: their phase */
-        int32_t m8 = steps25(o->mo, 1, 6), fr = m8 & 255, k = (unit(o->wy) * 19661) >> 15, ex, ey;
+    case SH_SPIRO: {                   /* MORPH: 1 .. 6 loops (an epicycle), WARP Y: their size (at least 0.2), WARP X: their phase */
+        int32_t m8 = steps25(o->mo, 1, 6), fr = m8 & 255, k = 6554 + ((unit(o->wy) * 13107) >> 15), ex, ey;   /* loops 0.2 .. 0.6: never a plain circle */
         uint32_t m0 = (uint32_t)m8 >> 8, ph = (uint32_t)o->wx << 16, a0 = ph - p * m0, a1 = a0 - p;
         ex = sinq(a0), ey = -cosq(a0);
         if (fr)
