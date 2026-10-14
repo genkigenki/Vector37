@@ -1,6 +1,8 @@
 # Vector37
 
-![Vector37](docs/img/orbit.webp)
+![Vector37](docs/img/banner.png)
+
+![Vector37 playing](docs/img/orbit.webp)
 
 **An orbiting overtone synth for the M-Vave SMK-37 Pro.**
 Four corners, each two overtone generators, a blend and a filter. A sun runs along a path, a moon circles it, and
