@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 M. Geisler (makkuro) */
-/* The screen in motion, for the docs (tools/docs_img.sh): the boot, a chord on the orbit, a corner knob turned, a
- * MODE pad, a held SEQ with the shapes, the suborbit opened. Frames (PPM, 40 ms apart) into OUTDIR.
- *   tools/anim OUTDIR        the tour
+/* The screen in motion, for the docs (tools/docs_img.sh). Frames (PPM, 40 ms apart) into OUTDIR.
+ *   tools/anim OUTDIR        the tour: the boot; a chord on a figure eight, the moon circling slowly; every screen in turn
  *   tools/anim OUTDIR N      sound N (0 .. 7) playing
  *   tools/anim OUTDIR family fader 1 through the path families
  *   tools/anim OUTDIR glide  new sounds, the faders' values gliding to them
@@ -164,9 +163,128 @@ static void planet_demo(void)
     play(1500);
 }
 
-int main(int argc, char **argv)
+/* the tour: the boot; then a chord held on a figure eight (Lissajous 1:2), the moon circling the sun slowly, while
+ * every screen is shown in turn: the orbit's knobs (none selected), a planet selected and edited, MODE, FILTER, two
+ * planets together, MUTE, the faders (each back to the eight), the mod wheel, the held buttons' knob sets, the guide */
+static void tap_pad(uint32_t p) { panel_pad(p, 100), panel_ms(40), panel_pad(p, 0); }
+static uint32_t padof(uint32_t g, uint32_t c) { return g * 2u + (c & 1u) + (c & 2u ? 8u : 0u); }
+static void turn(uint32_t k, int32_t step, uint32_t n, uint32_t ms)   /* knob k, n steps, one each ms */
+{
+    uint32_t j;
+    for (j = 0; j < n; j++) {
+        panel_enc(k, step);
+        play(ms);
+    }
+}
+static void fader_to(uint32_t i, uint32_t from, uint32_t to, uint32_t st, uint32_t ms)   /* a fader moved slowly */
+{
+    uint32_t v = from;
+    while (v != to) {
+        v = to > v ? (to - v > st ? v + st : to) : (v - to > st ? v - st : to);
+        panel_fader(i, v);
+        play(ms);
+    }
+}
+#define WHEEL_AT(r) (603u - (uint32_t)(r) * 118u / 127u)   /* the mod wheel's reading for MOON SPEED r */
+static void hold(uint32_t b, uint32_t ms) { panel_button(b, 1), play(ms), panel_button(b, 0); }
+
+static void tour(void)
 {
     uint32_t t, k;
+    panel_init();
+    fm1_in.frames = 400;
+    panel_ms(300);
+    preset_load(3);                                 /* TALKING: a figure eight, Lissajous x 1 : y 2, exact */
+    pt.g[G_SHAPE] = FAM_LISSA, pt.g[G_WARPX] = 0, pt.g[G_WARPY] = LX1, pt.g[G_MORPH] = LY2;
+    pt.g[G_RATE] = R16, pt.g[G_SIZE] = 70, pt.g[G_ROT] = 0, pt.g[G_SUBSZ] = 54;   /* (calm: a round in 9 s) */
+    for (t = 0; t <= BOOT_MS; t += 60u) {           /* the boot (a little faster) */
+        boot_frame(t);
+        snap();
+    }
+    ui.help = 1, panel_ms(60), ui.help = 0;         /* (unseen: all drawn anew; the faders and the wheel taken up, */
+    panel_fader(0, 10), panel_fader(1, 70), panel_fader(2, 22), panel_fader(3, 25);   /* the chord) (where the sound is) */
+    panel_wheel(1, WHEEL_AT(44));                   /* (MOON SPEED 44: a turn in about 3 s) */
+    panel_ms(2200);
+    panel_key(12, 1, 100), panel_key(16, 1, 90), panel_key(19, 1, 90);   /* a chord, held throughout */
+    panel_ms(600);
+    play(1500);
+    for (k = 0; k < 8u; k++) {                      /* none selected: the orbit's knobs, one by one */
+        static const int8_t ST[8] = {2, 2, 6, 1, 0, 1, 1, 6};   /* (WARP, WARP Y, ROTATE, SHARP, MOON DIST, SPIN, RETRIG, TEMPO) */
+        if (k == 4u) {                              /* MOON DIST: out, the moon's ring wider */
+            turn(4, 2, 6, 100);
+            play(600);
+            continue;
+        }
+        panel_enc(k, ST[k]);
+        play(550);
+        panel_enc(k, -ST[k]);
+        play(450);
+    }
+    tap_pad(padof(0, 0));                           /* SELECT planet 1: it zooms, the knobs are its own */
+    play(800);
+    turn(5, 3, 6, 100);                             /* K6 CUTOFF */
+    play(500);
+    turn(3, 5, 6, 100);                             /* K4 BLEND */
+    play(500);
+    tap_pad(padof(1, 0));                           /* MODE */
+    play(1000);
+    tap_pad(padof(2, 0));                           /* FILTER */
+    play(1000);
+    panel_pad(padof(0, 0), 100), panel_ms(30), panel_pad(padof(0, 3), 100), panel_ms(30);   /* planets 1 and 4 together */
+    panel_pad(padof(0, 0), 0), panel_pad(padof(0, 3), 0);
+    play(600);
+    turn(5, -3, 8, 100);                            /* K6: both, each from its own value */
+    play(600);
+    tap_pad(padof(0, 3));                           /* 4 out, then 1: none selected */
+    play(300);
+    tap_pad(padof(0, 0));
+    play(600);
+    tap_pad(padof(3, 1));                           /* MUTE planet 2: a flash, it collapses */
+    play(1100);
+    tap_pad(padof(3, 1));                           /* ... and on again: it ignites */
+    play(1100);
+    fader_to(0, 10, 40, 3, 80);                     /* F1 FAMILY: to the spirograph ... */
+    play(600);
+    fader_to(0, 40, 10, 3, 80);                     /* ... and back to the eight */
+    play(400);
+    fader_to(1, 70, 40, 3, 80);                    /* F2 SIZE */
+    play(300);
+    fader_to(1, 40, 70, 3, 80);
+    play(500);
+    panel_fader(2, 38);                             /* F3 SPEED: twice as fast, and back */
+    play(900);
+    panel_fader(2, 22);
+    play(500);
+    fader_to(3, 25, 50, 3, 80);                     /* F4 MORPH: y 3, a knot ... */
+    play(600);
+    fader_to(3, 50, 25, 3, 80);                     /* ... and back: y 2, the eight */
+    play(600);
+    for (k = 0; k <= 8u; k++) {                     /* the mod wheel: the moon faster, then slow again */
+        panel_wheel(1, WHEEL_AT(44 + k * 3u));
+        play(80);
+    }
+    play(900);
+    for (k = 0; k <= 8u; k++) {
+        panel_wheel(1, WHEEL_AT(68 - k * 3u));
+        play(80);
+    }
+    play(1600);                                     /* (its box gone: the held buttons' own) */
+    hold(B_FX, 1400);                               /* held buttons: their knob sets */
+    play(300);
+    hold(B_FADERBANK, 1400);
+    play(300);
+    hold(B_CHORD, 1400);
+    play(400);
+    panel_button(B_KNOBBANK, 1), panel_ms(40), panel_button(B_KNOBBANK, 0);   /* the guide; K1 scrolls it */
+    play(1100);
+    turn(0, 1, 16, 80);
+    play(900);
+    panel_button(B_KNOBBANK, 1), panel_ms(40), panel_button(B_KNOBBANK, 0);
+    play(800);
+}
+
+int main(int argc, char **argv)
+{
     odir = argc > 1 ? argv[1] : ".";
     if (argc > 2 && argv[2][0] == 'f') {            /* tools/anim OUTDIR family */
         family_demo();
@@ -184,41 +302,6 @@ int main(int argc, char **argv)
         one_sound((uint32_t)atoi(argv[2]));
         return 0;
     }
-    for (t = 0; t <= 2000u; t += 40u) {
-        boot_frame(t);
-        snap();
-    }
-    panel_init();
-    fm1_in.frames = 400;
-    play(800);
-    panel_key(12, 1, 100), panel_key(16, 1, 90), panel_key(19, 1, 90);   /* a chord */
-    play(1600);
-    for (k = 0; k < 12; k++) {                     /* K4: corner 1's cutoff, slowly up */
-        panel_enc(3, 3);
-        play(80);
-    }
-    play(600);
-    panel_pad(3, 100), panel_ms(30), panel_pad(3, 0);   /* MODE, corner 2 */
-    play(1000);
-    panel_key(23, 1, 100);
-    for (k = 0; k < 10; k++) {                     /* K6: the suborbit opens */
-        panel_enc(5, 6);
-        play(80);
-    }
-    play(800);
-    panel_button(15, 1);                            /* SEQ held: the orbit's knobs; shapes by K1 */
-    play(400);
-    for (k = 0; k < 4; k++) {
-        panel_enc(0, 1);
-        play(900);
-    }
-    panel_enc(0, 2);
-    play(400);
-    panel_button(15, 0);
-    play(600);
-    panel_fader(0, 120);                            /* a fader: reverb */
-    play(1000);
-    panel_key(12, 0, 0), panel_key(16, 0, 0), panel_key(19, 0, 0), panel_key(23, 0, 0);
-    play(1500);
+    tour();
     return 0;
 }

@@ -109,11 +109,20 @@ int main(int argc, char **argv)
 {
     uint32_t t, c, k;
     dir = argc > 1 ? argv[1] : ".";
-    for (t = 0; t <= 2000u; t += 400u) {            /* the boot */
+    for (t = 0; t <= BOOT_MS; t += 400u) {          /* the boot */
         char n[32];
         boot_frame(t);
         snprintf(n, sizeof n, "boot_%04u", t);
         shot(n);
+    }
+    {   /* at its end the planets are where the orbit screen has them (the hand-over) */
+        uint32_t ok = 1;
+        int32_t x, y;
+        for (c = 0; c < NC; c++) {
+            corner_xy(c, &x, &y);
+            ok &= count_col(x - 4, y - 4, x + 5, y + 5, RGB(2, 3, 12)) < 20u;
+        }
+        check("boot: it ends with the four planets in their corners", ok);
     }
     panel_init();
     fm1_in.frames = 400;

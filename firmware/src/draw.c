@@ -2,7 +2,7 @@
  * Copyright (C) 2026 M. Geisler (makkuro) */
 /* The screen, by meaning: the top line says what a pad, fader or button did; the orbit leads, a little universe (a
  * square in a night sky with twinkling stars; the four corners are planets glowing as much as they sound, the
- * selected one zoomed up in a red ring; the blue orb a small sun on its dotted path with a comet's tail, the green orb
+ * selected one zoomed up in a red ring; the blue orb a small sun on its dotted path, its trace behind it, the green orb
  * its moon on a faint ring; every other voice a smaller pair). A planet's values show in its speech bubble (its eight
  * knobs as pictures; a pad's list), everything global in the central box; at the bottom four small path faders. The
  * planets and the overlays reach over the square's edge into the sky. KNOB BANK: the guide, with pictures. Only what
@@ -87,6 +87,9 @@ static void corner_xy(uint32_t c, int32_t *x, int32_t *y)
 #define NSTAR 96
 #define TRAJ_N 1024                            /* the path's points at most (sub-pixel, ~1.5 pixels apart) */
 #define TRAIL_N 10
+#define TP_N 128                                   /* the sun's trace: its points at most (~1.5 pixels apart) */
+#define TP_MS 300u                                 /* (as far back as the sun went in 0.3 s ... */
+#define TP_LEN (90 * 16)                           /* ... but at most 90 pixels along the path) */
 #define MOONS 8
 static struct {
     int16_t tx[TRAJ_N], ty[TRAJ_N];                /* the path, 1/16 pixels */
@@ -96,8 +99,11 @@ static struct {
     int32_t sx16, sy16, mr16, mx16, my16;          /* the sun, the moon's ring radius, the moon, 1/16 pixels */
     uint32_t mph;                                  /* the moon's phase round the sun */
     uint8_t msrc;                                  /* (whose moon: a voice, or 255 the free orbit) */
-    int16_t trx[TRAIL_N], try_[TRAIL_N];           /* the comet's tail, newest first */
+    int16_t trx[TRAIL_N], try_[TRAIL_N];           /* the comet's tail, newest first (sampled: an ADSR walk, focus) */
     uint8_t ntr;
+    int16_t tpx[TP_N], tpy[TP_N];                  /* the sun's trace: the path itself behind it, 1/16 pixels, */
+    uint8_t tpk[TP_N];                             /* newest first; its brightness */
+    uint8_t ntp;                                   /* its points (0: the sampled tail instead) */
     uint8_t nmoon;
     int16_t ox[MOONS], oy[MOONS], gx[MOONS], gy[MOONS];   /* the other voices: their suns and moons */
     int32_t w[NC], pw[NC];                         /* corner weights now; as the planets are drawn */
@@ -240,11 +246,12 @@ static int planet_band(int32_t px, int32_t py, int32_t R, uint32_t pat, int32_t 
         return (hash3(px, py, (uint32_t)off >> 6) & 7u) == 0u;
     return ((((u + 4096) * n) / (R * 32)) & 1) != 0;
 }
+static int32_t planet_r0;                          /* (the boot: a planet's radius, else 0) */
 #define MUTE_ANIM_MS 450u                          /* a planet switched off / on: its animation */
 static void planet(uint32_t c, int32_t x, int32_t y, int32_t mute)
 {
     const int16_t *q = pt.c[c];
-    int32_t z = sc.zoom[c], R0 = 7 + (z * 8 >> 8), R = R0, R2, wk = sc.pw[c] >> 7, k, px, py;
+    int32_t z = sc.zoom[c], R0 = planet_r0 ? planet_r0 : 7 + (z * 8 >> 8), R = R0, R2, wk = sc.pw[c] >> 7, k, px, py;
     int32_t lf = 100 + q[CP_LEVEL] * 156 / 127, dim = 205 + (z * 51 >> 8), fade = 256, outline = 0;
     uint32_t age = ui.mute_t[c] ? fm1_ms - ui.mute_t[c] : 0xFFFFu;
     int anim = age < MUTE_ANIM_MS, off_anim = anim && q[CP_MUTE], on_anim = anim && !q[CP_MUTE];
@@ -1116,10 +1123,23 @@ static void field_draw(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
             disc(sc.gx[i], sc.gy[i], 1, rgbk(MOON, 170));
         }
     }
-    for (i = sc.ntr; i-- > 1u;) {                  /* the tail, oldest first */
+    for (i = sc.ntp ? 0u : sc.ntr; i-- > 1u;) {    /* the tail, oldest first (sampled) */
         int32_t kk = 200 - (int32_t)i * 200 / TRAIL_N;
         if (HIT(sc.trx[i], sc.try_[i], 3))
             glow(sc.trx[i], sc.try_[i], 3 - (int32_t)i * 2 / TRAIL_N, SUN, kk);
+    }
+    for (i = sc.ntp; i-- > 0u;) {                  /* the trace: the path behind the sun, fading; soft, wider near it */
+        static const uint8_t TC[3] = {150, 200, 255};
+        int32_t ax = sc.tpx[i] >> 4, ay = sc.tpy[i] >> 4, fx = sc.tpx[i] & 15, fy = sc.tpy[i] & 15, kk = sc.tpk[i];
+        if (!HIT(ax, ay, 2))
+            continue;
+        cv_add(ax, ay, TC, (16 - fx) * (16 - fy) * kk >> 8);
+        cv_add(ax + 1, ay, TC, fx * (16 - fy) * kk >> 8);
+        cv_add(ax, ay + 1, TC, (16 - fx) * fy * kk >> 8);
+        cv_add(ax + 1, ay + 1, TC, fx * fy * kk >> 8);
+        if (kk > 110)
+            kk = (kk - 110) / 3, cv_add(ax - 1, ay, SUN, kk), cv_add(ax + 2, ay, SUN, kk), cv_add(ax, ay - 1, SUN, kk),
+            cv_add(ax, ay + 2, SUN, kk), cv_add(ax + 1, ay - 1, SUN, kk), cv_add(ax + 1, ay + 2, SUN, kk);
     }
     if (HIT(sc.sx, sc.sy, 10)) {                   /* the sun */
         glow(sc.sx, sc.sy, 10, SUN, 230 + (sc.om * 26 >> 8));
@@ -1167,6 +1187,58 @@ static void field_rect(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
     }
 }
 
+/* the sun's trace: the path itself from the sun (at phase ph) back as far as it went in TP_MS, at most TP_LEN along
+ * it; a point every 1 .. 2 pixels (the step in phase halved or doubled to keep them so), so it is smooth at any
+ * speed. Where the path is not the place (an ADSR walk, the focus): the sampled tail. The tiles where it was and is */
+static void trace_take(uint32_t ph, int adsr)
+{
+    uint32_t i, n = 0, back = 0, span, step;
+    int32_t len = 0, px, py;
+    for (i = 0; i < sc.ntp; i++)                   /* (where it was) */
+        rq_add((sc.tpx[i] >> 4) - 2, (sc.tpy[i] >> 4) - 2, (sc.tpx[i] >> 4) + 4, (sc.tpy[i] >> 4) + 4);
+    sc.ntp = 0;
+    if (adsr || focus || fam_q8(&ost.p) > 3 * 256)
+        return;
+    {
+        uint64_t sp = (uint64_t)orbit_inc() * (TP_MS * FS / CTL / 1000u);
+        span = sp > 0xFFFFFFFFull ? 0xFFFFFFFFu : (uint32_t)sp;
+    }
+    if (span < (1u << 16))
+        return;
+    step = span / 64u;
+    traj_at(ph, &px, &py);
+    sc.tpx[n] = (int16_t)px, sc.tpy[n] = (int16_t)py, n++;
+    while (n < TP_N && back < span && len < TP_LEN) {
+        int32_t nx, ny, d;
+        uint32_t st = step;
+        for (;;) {                                 /* (no further than 2 pixels: halved) */
+            st = st > span - back ? span - back : st;
+            traj_at(ph - back - st, &nx, &ny);
+            d = (nx - px) * (nx - px) + (ny - py) * (ny - py);
+            if (d <= 32 * 32 || st <= 256u)
+                break;
+            st >>= 1;
+        }
+        back += st, step = st;
+        if (d < 16 * 16 && step < (1u << 28))
+            step <<= 1;                            /* (closer than a pixel: longer steps) */
+        len += isqrt32((uint32_t)d);
+        sc.tpx[n] = (int16_t)nx, sc.tpy[n] = (int16_t)ny, n++;
+        px = nx, py = ny;
+    }
+    {   /* bright at the sun, dark at the end: by the way along it (of the longer of its length, half the cap) */
+        int32_t full = len > TP_LEN / 2 ? len : TP_LEN / 2, at = 0;
+        for (i = 0; i < n; i++) {
+            if (i)
+                at += isqrt32((uint32_t)((sc.tpx[i] - sc.tpx[i - 1u]) * (sc.tpx[i] - sc.tpx[i - 1u]) +
+                                         (sc.tpy[i] - sc.tpy[i - 1u]) * (sc.tpy[i] - sc.tpy[i - 1u])));
+            sc.tpk[i] = (uint8_t)clamp(230 * (full - at) / full, 0, 255);
+            rq_add((sc.tpx[i] >> 4) - 2, (sc.tpy[i] >> 4) - 2, (sc.tpx[i] >> 4) + 4, (sc.tpy[i] >> 4) + 4);
+        }
+    }
+    sc.ntp = (uint8_t)n;
+}
+
 /* this frame's orbs from the engine: the newest voice sounding is the sun and moon, the others small */
 static void orbs_take(void)
 {
@@ -1183,6 +1255,7 @@ static void orbs_take(void)
             sc.ntr++;
     }
     sc.sx = (int16_t)sx, sc.sy = (int16_t)sy;
+    trace_take(s ? s->oph - (freeze ? 0u : orbit_inc()) : syn.oph, s && orbit_all_adsr());
     sc.mx = (int16_t)fpx(s ? s->gx : syn.gx), sc.my = (int16_t)fpy(s ? s->gy : syn.gy);
     sc.mx16 = FX0 * 16 + ((((s ? s->gx : syn.gx) + 32768) * (FW - 1)) >> 12);
     sc.my16 = FY0 * 16 + ((((s ? s->gy : syn.gy) + 32768) * (FW - 1)) >> 12);
@@ -1343,7 +1416,7 @@ static void field_frame(int full)
         int32_t x0 = sc.sx - 11, y0 = sc.sy - 11, x1 = sc.sx + 12, y1 = sc.sy + 12;
 #define GROW(ax, ay, r) x0 = ax - (r) < x0 ? ax - (r) : x0, y0 = ay - (r) < y0 ? ay - (r) : y0, \
                         x1 = ax + (r) + 1 > x1 ? ax + (r) + 1 : x1, y1 = ay + (r) + 1 > y1 ? ay + (r) + 1 : y1
-        for (i = 1; i < sc.ntr; i++) {             /* (the tail: a small box each, not one round them all) */
+        for (i = 1; !sc.ntp && i < sc.ntr; i++) {  /* (the tail: a small box each, not one round them all) */
             spr[nspr].x0 = (int16_t)clamp(sc.trx[i] - 4, SX0, SX1), spr[nspr].y0 = (int16_t)clamp(sc.try_[i] - 4, SY0, SY1);
             spr[nspr].x1 = (int16_t)clamp(sc.trx[i] + 5, SX0, SX1), spr[nspr].y1 = (int16_t)clamp(sc.try_[i] + 5, SY0, SY1);
             nspr++;
@@ -1749,49 +1822,86 @@ static void draw_frame(void)
     ui.dirty = 0;
 }
 
-/* ------------------------------------------------------------- boot: through the stars --- */
-/* stars rush past (the warp), slow down; the four planets and the sun's ring open, then the name */
+/* ------------------------------------------------------------- boot: a solar system --- */
+/* we fly on into the stars (streaming out from the middle, brighter the nearer); a solar system ahead, slowly
+ * nearer: the sun, four round orbits, a planet on each (as on the orbit screen, twice as large) going round; the name;
+ * then the planets go out to their corners and the sky stays: the orbit screen */
+#define BOOT_MS 2400u
+#define BOOT_NAME 1000u                            /* (the name: from here) */
+#define BOOT_OUT 1900u                             /* (the hand-over: from here to the end) */
 static void boot_frame(uint32_t t)
 {
-    int32_t half, k, ease = t >= 1100u ? 256 : (int32_t)(t * 256u / 1100u);
-    int32_t speed = 256 - ease, ring = clamp(((int32_t)t - 700) * 256 / 700, 0, 256);
-    ease = 256 - ((256 - ease) * (256 - ease) >> 8);
+    static const int16_t ORB_R[NC] = {36, 58, 80, 102};      /* (the orbits, close up) */
+    static const uint32_t TO[NC] = {0xE0000000u, 0x20000000u, 0xA0000000u, 0x60000000u};   /* (towards its corner) */
+    static const uint16_t PERIOD[NC] = {7000, 10000, 14000, 19000};   /* (ms a round: the inner ones faster) */
+    static const uint8_t STARC[3] = {200, 215, 255}, RING[3] = {70, 110, 220};
+    int32_t half, k, c, in = clamp((int32_t)t * 256 / 350, 0, 256);
+    int32_t zt = clamp((int32_t)t * 256 / (int32_t)BOOT_OUT, 0, 256), zoom, out, nk, sysk;
+    zt = 256 - ((256 - zt) * (256 - zt) >> 8);     /* (nearer, slowing) */
+    zoom = 150 + (106 * zt >> 8);                  /* 0.59 .. 1 */
+    out = clamp(((int32_t)t - (int32_t)BOOT_OUT) * 256 / (int32_t)(BOOT_MS - BOOT_OUT), 0, 256);
+    out = (out * out >> 8) * (3 * 256 - 2 * out) >> 8;   /* (smoothstep) */
+    nk = clamp(((int32_t)t - (int32_t)BOOT_NAME) * 256 / 350, 0, 256) * (256 - clamp(((int32_t)t - 1850) * 256 / 250, 0, 256)) >> 8;
+    sysk = in * (256 - (nk * 140 >> 8)) >> 8;      /* (the sun and the orbits dimmer under the name) */
     for (half = 0; half < 2; half++) {
         int32_t y0 = half * 120;
-        cv_begin(240, 120, RGB(1, 2, 10));
+        cv_begin(240, 120, C_BG);
         cv_oy = -y0;
-        for (k = 0; k < 120; k++) {                /* stars from the centre out: streaks while fast */
-            uint32_t h = hash3(k, 11, 3u);
-            uint32_t a = h << 8;
-            int32_t z = (int32_t)((h >> 20) % 1000u) - (int32_t)(t * (uint32_t)(40 + speed * 3) / 64u) % 1000;
-            int32_t r0, r1, s;
-            if (z < 0)
-                z += 1000;
-            z += 30;
-            r0 = 30000 / z, r1 = 30000 / (z + 6 + speed / 4);
-            r0 = r0 > 170 ? 170 : r0;
+        for (k = 0; k < 140; k++) {                /* the stars: out from the middle, a short streak, nearer brighter */
+            uint32_t h = hash3(k, 11, 3u), a = h << 8;
+            int32_t z = 1000 - (int32_t)(((h >> 20) % 1000u + t * 45u / 64u) % 970u), r0, r1, s, kk;
+            r0 = 26000 / z, r1 = 26000 / (z + 14);
+            if (r0 > 175 || r1 < 4)
+                continue;
+            r1 = r0 - r1 > 7 ? r0 - 7 : r1;
+            kk = clamp(50 + 24000 / z, 0, 256) * (256 - out) >> 8;
             for (s = r1; s <= r0; s++)
-                cv_add(120 + ((sinq(a) * s) >> 15), 120 + ((cosq(a) * s) >> 15), (const uint8_t[]){200, 215, 255},
-                       clamp(60 + 2200 / z, 0, 256));
+                cv_add(120 + ((sinq(a) * s) >> 15), 120 + ((cosq(a) * s) >> 15), STARC, kk * (s - r1 + 1) / (r0 - r1 + 1));
         }
-        if (ring) {                                /* the orbit: an ellipse, four planets, the sun */
-            for (k = 0; k < 256; k++) {
-                uint32_t a = (uint32_t)k << 24;
-                cv_add(120 + ((sinq(a) * 96) >> 15), 112 + ((cosq(a) * 34) >> 15), (const uint8_t[]){70, 110, 220}, ring * 3 / 4);
-            }
-            for (k = 0; k < NC; k++) {
-                uint32_t a = (uint32_t)k * 0x40000000u + 0x20000000u + t * 400000u;
-                int32_t x = 120 + ((sinq(a) * 96) >> 15), y = 112 + ((cosq(a) * 34) >> 15);
-                glow(x, y, 9, CCOL[k], ring * 3 / 4);
-                disc(x, y, 4, rgbk(CCOL[k], ring));
-            }
-            glow(120, 112, 22, SUN, ring);
-            disc(120, 112, 5, rgbk((const uint8_t[]){225, 240, 255}, ring));
+        for (k = 0; out && k < NSTAR; k++) {       /* (the orbit screen's sky, coming) */
+            int32_t x, y;
+            star_xy((uint32_t)k, &x, &y);
+            if (y >= y0 && y < y0 + 120)
+                cv_add(x, y, STARC, star_k((uint32_t)k, t) * out >> 8);
         }
-        if (t > 1100u) {                           /* the name */
-            int32_t k2 = clamp((int32_t)(t - 1100u) * 256 / 500, 0, 256);
-            text_c(120, 160, &FONT_XL, "VECTOR37", RGB(120 * k2 >> 8, 170 * k2 >> 8, 255 * k2 >> 8));
-            text_c(120, 214, &FONT_S, "by genkigenki", RGB(150 * k2 >> 8, 160 * k2 >> 8, 210 * k2 >> 8));
+        for (c = 0; c < NC; c++) {                 /* the orbits */
+            int32_t r = ORB_R[c] * zoom >> 8, n = r * 6, kk = (sysk * 3 / 5) * (256 - out) >> 8;
+            if (y0 > 120 + r || y0 + 120 < 120 - r || kk <= 0)
+                continue;
+            for (k = 0; k < n; k++) {
+                uint32_t a = (uint32_t)k * (0xFFFFFFFFu / (uint32_t)n);
+                cv_add(120 + ((sinq(a) * r) >> 15), 120 - ((cosq(a) * r) >> 15), RING, kk);
+            }
+        }
+        glow(120, 120, 20 * zoom >> 8, SUN, sysk * (256 - out) >> 8);   /* the sun */
+        glow(120, 120, 8 * zoom >> 8, (const uint8_t[]){200, 225, 255}, (sysk * 3 / 4) * (256 - out) >> 8);
+        disc(120, 120, (4 * zoom >> 8) * (256 - out) >> 8, rgbk((const uint8_t[]){225, 240, 255}, sysk * (256 - out) >> 8));
+        for (c = 0; c < NC; c++) {                 /* the planets: going round; at the end out to their corners */
+            uint32_t a = TO[c] + (uint32_t)(((int32_t)t - (int32_t)BOOT_OUT) * (int32_t)(0xFFFFFFFFu / PERIOD[c]));
+            int32_t r = ORB_R[c] * zoom >> 8, x = 120 + ((sinq(a) * r) >> 15), y = 120 - ((cosq(a) * r) >> 15), cx, cy;
+            corner_xy((uint32_t)c, &cx, &cy);
+            x += (cx - x) * out >> 8, y += (cy - y) * out >> 8;
+            if (y + 30 < y0 || y - 30 >= y0 + 120)
+                continue;
+            planet_r0 = (14 * zoom >> 8) - (7 * out >> 8);
+            sc.pw[c] = 0;
+            planet((uint32_t)c, x, y, 0);
+        }
+        planet_r0 = 0;
+        if (nk) {                                  /* the name, on a band of shade */
+            int32_t y, x, f = 256 - (nk * 170 >> 8);
+            for (y = 84; y < 162; y++) {
+                int32_t fy = y < 96 ? 256 - (256 - f) * (y - 83) / 12 : y >= 150 ? 256 - (256 - f) * (162 - y) / 12 : f, cy = y - y0;
+                if (cy < 0 || cy >= 120)
+                    continue;
+                for (x = 0; x < 240; x++) {
+                    uint32_t q = swap16(cv_px[cy * 240 + x]);
+                    cv_px[cy * 240 + x] = swap16(RGB(((q >> 11) << 3) * fy >> 8, (((q >> 5) & 63u) << 2) * fy >> 8,
+                                                      (uint32_t)(8 + (((int32_t)((q & 31u) << 3) - 8) * fy >> 8))));   /* (to the sky's blue) */
+                }
+            }
+            text_c(120, 92, &FONT_XL, "VECTOR37", RGB(120 * nk >> 8, 170 * nk >> 8, 255 * nk >> 8));
+            text_c(120, 142, &FONT_S, "by genkigenki", RGB(150 * nk >> 8, 160 * nk >> 8, 210 * nk >> 8));
         }
         cv_oy = 0;
         cv_blit(0, (uint32_t)y0);
@@ -1804,7 +1914,7 @@ static void boot_anim(void)
     for (;;) {
         uint32_t t = fm1_ms - t0;
         fm1_wdt_feed();
-        if (t > 2000u || (fm1_in.keys && t > 300u))
+        if (t > BOOT_MS || (fm1_in.keys && t > 300u))
             break;
         boot_frame(t);
         fm1_delay_ms(10);

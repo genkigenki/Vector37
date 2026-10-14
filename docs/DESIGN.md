@@ -120,8 +120,9 @@ By meaning, top to bottom (the path drawing: see "Paths you can morph"): the top
 button did ("PAD FILTER 3: LP24", "F2 SIZE 80", "HOLD FX: MIXER KNOBS"), else the sound and the level. The orbit
 leads: a 176 x 176 square in a night sky that fills the screen between the top and the bottom line (twinkling
 stars, a dotted path, the four planets glowing with their weights, the selected one zoomed up in a red ring, the sun
-with a comet tail, the moon on its ring, every other voice a smaller pair). The path, the suns and the moons stay in
-the square; the planets, their bubbles and the central box reach over its edge into the sky, drawn whole. A planet's
+with its trace (the path itself behind it, fading, smooth at any speed), the moon on its ring, every other voice a
+smaller pair). The path, the suns and the moons stay in the square; the planets, their bubbles and the central box
+reach over its edge into the sky, drawn whole. A planet's
 values live in its speech bubble (its tail round the planet, its colour): picked or turned, the overview of its eight
 knobs (pictures: the patterns' waves, the ratio, a BLEND dial, the modulated wave, the filter's curve, a level bar;
 the turned one large); a MODE, FILTER or MUTE pad shows its list. Everything global lives in the central box (square,

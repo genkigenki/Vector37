@@ -32,7 +32,10 @@ for k, v in keep.items():
     Image.open(os.path.join(t, "s", k + ".ppm")).resize((480, 480), Image.NEAREST).save(os.path.join(out, "screen-" + v + ".png"))
 frames = [Image.open(p).convert("RGB") for p in sorted(glob.glob(os.path.join(t, "a", "*.ppm")))]
 frames = frames[::2]
-frames[0].save(os.path.join(out, "orbit.webp"), save_all=True, append_images=frames[1:], duration=80, loop=0, quality=80, method=4)
+EIGHT = 33                                  # (a frame of the figure eight, the moon round the sun, nothing over it)
+frames[0].save(os.path.join(out, "orbit.webp"), save_all=True, append_images=frames[1:], duration=80, loop=0, quality=78, method=6,
+               allow_mixed=True, minimize_size=True)
+frames[EIGHT].resize((480, 480), Image.NEAREST).save(os.path.join(out, "screen-orbit-eight.png"))   # the tour's figure eight
 names = ["nebula-pad", "orbit-bass", "glass-bells", "talking", "deep-drone", "pluck-step", "sync-lead", "space-station"]
 for n, name in enumerate(names):          # each sound playing: docs/img/preset-N-name.webp
     fr = [Image.open(p).convert("RGB") for p in sorted(glob.glob(os.path.join(t, f"p{n}", "*.ppm")))][::2]
