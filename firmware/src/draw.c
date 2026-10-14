@@ -160,6 +160,7 @@ static void traj_update(void)
     static uint32_t t_last, cost = 120u;           /* (the last redraw's pixels: SPIN redraws as often as the SPI
                                                       can spare, ~70000 pixels a second for it, 120 .. 500 ms) */
     uint32_t h = 1, k, n = 0, step = 1u << 24, done = 0, pos = 0, t0 = 0;
+    int32_t lim;
     const int32_t *v = &ost.p.wx;
     int32_t px, py;
     for (k = 0; k < 10u; k++)
@@ -173,6 +174,9 @@ static void traj_update(void)
             t0++;
     step = 1u << 24;
     traj_mark();                                   /* (where it was) */
+    for (lim = 24 * 24; ; lim *= 4) {              /* (a long figure that needs more than TRAJ_N points: again with
+                                                      the points twice as far apart, so it is always drawn closed) */
+    n = 0, done = 0, pos = 0, step = 1u << 24;
     traj_at(0, &px, &py);
     sc.tx[n] = (int16_t)px, sc.ty[n] = (int16_t)py, n++;
     while (!done && n < TRAJ_N) {                  /* steps of 1/256 round, halved (to 1/8192) while too far apart */
@@ -182,15 +186,18 @@ static void traj_update(void)
             p = pos > 0xFFFFFFFFu - step ? 0xFFFFFFFFu : pos + step;
             traj_at(p, &nx, &ny);
             d = (nx - px) * (nx - px) + (ny - py) * (ny - py);
-            if (d <= 24 * 24 || step <= (1u << 19))
+            if (d <= lim || step <= (1u << 19))
                 break;
             step >>= 1;
         }
         sc.tx[n] = (int16_t)nx, sc.ty[n] = (int16_t)ny, n++;
         px = nx, py = ny, pos = p;
         done = p == 0xFFFFFFFFu;
-        if (d < 8 * 8 && step < (1u << 24))
+        if (d * 9 < lim && step < (1u << 24))
             step <<= 1;                            /* (straighter: longer steps again) */
+    }
+    if (done || lim >= 24 * 24 * 64)
+        break;
     }
     sc.ntj = (uint16_t)n;
     traj_mark();                                   /* (where it is) */
