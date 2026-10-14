@@ -49,6 +49,7 @@ class Vector37 extends AudioWorkletProcessor {
     }
     msg.pads = Array.from(new Uint32Array(mem, ex.sim_pads(), 16));
     msg.leds = ex.sim_leds();
+    msg.ctl = [0, 1, 2, 3, 4].map((i) => ex.sim_ctl(i));   // (the faders' and the mod wheel's places: the values)
     this.port.postMessage(msg, tr);
   }
   process(inputs, outputs) {

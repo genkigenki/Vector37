@@ -163,13 +163,21 @@ for (let p = 0; p < 16; p++) {
   $("mid").appendChild(el);
 }
 
-// ---- faders: the path (as the simulated device starts)
-const FV = [60, 20, 40, 100], FN = ["FAMILY", "SIZE", "SPEED", "MORPH"];   // the path (a moved fader: its value glides to it)
+// ---- faders: the path. Not held, a handle shows where the sound's value is (a new sound moves them), so a touch
+// goes on from there; held, it sends (the firmware glides a moved fader's value to it, as on the unit)
+const FN = ["FAMILY", "SIZE", "SPEED", "MORPH"], faderEl = [], holding = [false, false, false, false, false];
 for (let i = 0; i < 4; i++) {
-  const d = mk("", `<input class="v" type="range" min="0" max="127" value="${FV[i]}"><div class="lab">${FN[i]}</div>`);
+  const d = mk("", `<input class="v" type="range" min="0" max="127" value="64"><div class="lab">${FN[i]}</div>`);
   d.firstChild.addEventListener("input", (ev) => send({ type: "fader", i, v: +ev.target.value }));
+  hold(d.firstChild, i);
+  faderEl[i] = d.firstChild;
   $("faders").appendChild(d);
 }
+function hold(el, i) {                                 // (held: the page leaves the handle to the hand)
+  el.addEventListener("pointerdown", () => { holding[i] = true; });
+  ["pointerup", "pointercancel", "lostpointercapture", "blur", "change"].forEach((e) => el.addEventListener(e, () => { holding[i] = false; }));
+}
+addEventListener("pointerup", () => holding.fill(false));
 
 // ---- wheels: pitch springs back; mod up = more (raw 615 down .. 485 up)
 const pitch = $("pitch");
@@ -190,6 +198,7 @@ function pitchHome() {                                 // let go: the spring pul
 ["change", "pointerup", "pointercancel", "lostpointercapture", "blur"].forEach((e) => pitch.addEventListener(e, () => { if (+pitch.value !== 540) pitchHome(); }));
 window.addEventListener("pointerup", () => { if (pitchHeld) pitchHome(); });
 $("mod").addEventListener("input", (ev) => send({ type: "wheel", i: 1, raw: 615 - +ev.target.value }));
+hold($("mod"), 4);
 
 // ---- keys: 37, C..C, across the full width (black keys placed in % of it)
 const keyEl = [], WHITE = [0, 2, 4, 5, 7, 9, 11];
@@ -234,6 +243,10 @@ function frame(m) {
     padEl[p].style.boxShadow = lit ? `0 0 16px ${col}` : "";
   });
   if (m.leds !== undefined) btnEl.forEach((el, b) => el && el.classList.toggle("lit", !!((m.leds >> b) & 1)));
+  if (m.ctl) m.ctl.forEach((v, i) => {                  // the faders and the mod wheel where the sound's values are
+    const el = i < 4 ? faderEl[i] : $("mod");
+    if (!holding[i] && +el.value !== v) el.value = v;
+  });
 }
 
 $("start").addEventListener("click", async () => {

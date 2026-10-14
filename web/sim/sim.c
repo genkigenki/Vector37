@@ -37,3 +37,24 @@ EXPORT void sim_enc(uint32_t e, int32_t steps) { panel_enc(e, steps); }
 EXPORT void sim_fader(uint32_t i, uint32_t v) { panel_fader(i, v); }
 EXPORT void sim_wheel(uint32_t i, uint32_t raw) { panel_wheel(i, raw); }
 EXPORT void sim_midi(uint32_t st, uint32_t d1, uint32_t d2) { panel_midi(st, d1, d2); }
+/* the controls' places for the page: fader i (0..3) where the sound's value sits (0..127, the middle of the fader
+ * travel that gives it); 4: the mod wheel's slider (0..130) for MOON SPEED. The page moves its handles there while
+ * they are not held, so a new sound's values show and a touch goes on from them (the firmware's glide unchanged) */
+EXPORT int32_t sim_ctl(uint32_t i)
+{
+    if (i < 4u) {
+        int32_t v = pt.g[FADER_G[i]], bd = 1 << 30, lo = 0, hi = 0, r;
+        for (r = 0; r < 128; r++) {
+            int32_t d = fader_value(i, (uint32_t)r) - v;
+            d = d < 0 ? -d : d;
+            if (d < bd)
+                bd = d, lo = hi = r;
+            else if (d == bd && r == hi + 1)
+                hi = r;
+        }
+        return (lo + hi) / 2;
+    }
+    if (i == 4u)                                   /* (the slider: raw 615 - s; 12 steps of dead band at the bottom) */
+        return 12 + (pt.g[G_SUBSPD] * 118 + 63) / 127;
+    return 0;
+}

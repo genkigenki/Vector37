@@ -51,6 +51,15 @@ ex.sim_pad(9, 110); run(0.05); ex.sim_pad(9, 0); run(0.05);   // the same pad ag
 check("... tapped again: none selected, the knobs are the orbit", ((ex.sim_ui() >> 8) & 255) === 0 && (ex.sim_ui() >> 16) === 1);
 tap(3);
 check("> : the next sound", (ex.sim_ui() & 255) === 1);
+{   // the page's faders and mod wheel stand where the sound's values are; a touch from there moves on, no jump
+  const size = ex.sim_param(0, 4), spd = ex.sim_param(0, 9);
+  check(`faders in sync: SIZE ${size} at ${ex.sim_ctl(1)}, MOON SPEED ${spd} at ${ex.sim_ctl(4)}`,
+        ex.sim_ctl(1) === size && ex.sim_ctl(4) === 12 + Math.floor((spd * 118 + 63) / 127));
+  const morph = ex.sim_param(0, 42), f = ex.sim_ctl(3);   // (G_MORPH; -64..63 over the fader's 0..127)
+  ex.sim_fader(3, f - 1); run(0.6);
+  check(`... MORPH's handle (${f}) touched at its place: ${morph} -> ${ex.sim_param(0, 42)}, no jump`,
+        Math.abs(ex.sim_param(0, 42) - morph) <= 2);
+}
 for (const k of [12, 16, 19, 23]) ex.sim_key(k, 0);
 run(0.5);
 check(`cost: ${(load * 100).toFixed(1)} % of real time`, load < 0.5);
