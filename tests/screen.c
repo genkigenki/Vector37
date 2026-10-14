@@ -115,6 +115,7 @@ int main(int argc, char **argv)
         snprintf(n, sizeof n, "boot_%04u", t);
         shot(n);
     }
+    boot_frame(BOOT_MS);
     {   /* at its end the planets are where the orbit screen has them (the hand-over) */
         uint32_t ok = 1;
         int32_t x, y;
@@ -123,6 +124,22 @@ int main(int argc, char **argv)
             ok &= count_col(x - 4, y - 4, x + 5, y + 5, RGB(2, 3, 12)) < 20u;
         }
         check("boot: it ends with the four planets in their corners", ok);
+    }
+    {   /* the boot's frames: only the changed tiles sent; at ~30 ms a frame, what the SPI (~375000 pixels a second) carries */
+        uint32_t p0, n = 0, worst = 0, sum = 0, i;
+        for (i = 0; i < 900u; i++)
+            boot_th[i] = 0;
+        boot_frame(0);
+        for (t = 30; t <= BOOT_MS; t += 30u) {
+            p0 = fb_pixels;
+            boot_frame(t);
+            sum += fb_pixels - p0, n++;
+            worst = fb_pixels - p0 > worst ? fb_pixels - p0 : worst;
+        }
+        printf("  info boot: %u pixels a frame on average, %u at most (a whole screen 57600): ~%u frames a second on the SPI, "
+               "%u at the slowest\n", sum / n, worst, 375000u / (sum / n), 375000u / worst);
+        check("boot: frames small enough for 25 a second on average (the SPI), never below 10", 375000u / (sum / n) >= 25u &&
+              375000u / worst >= 10u);
     }
     panel_init();
     fm1_in.frames = 400;

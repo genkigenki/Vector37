@@ -4,7 +4,7 @@
 /* Vector37, an orbiting overtone synth for the M-Vave SMK-37 Pro: one compilation unit (the HAL is
  * header-only; board layer from SLOOP / Felucca). Order matters. */
 #include <stdint.h>
-#define MK_VERSION "0.1"
+#define MK_VERSION "0.2"
 #define BRAND_NAME "VECTOR37"
 #define BRAND_CRASH "VECTOR37 CRASH"
 #define BRAND_RESCUE "VECTOR37 USB RESCUE"

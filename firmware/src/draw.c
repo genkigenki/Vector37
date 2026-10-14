@@ -1793,6 +1793,7 @@ static void draw_manual(void)                      /* the guide, from ui.mscroll
 }
 
 /* ------------------------------------------------------------- the frame --- */
+static uint8_t boot_handover;                      /* (the boot's last frame on the screen: below) */
 static void draw_frame(void)
 {
     static uint32_t t_field;
@@ -1801,8 +1802,9 @@ static void draw_frame(void)
     uint32_t now = fm1_ms;
     int force = 0;
     if (ui.help != shown_help) {                   /* in or out of the guide: all anew */
+        if (shown_help != 2u || !boot_handover)    /* (after the boot: drawn over its last frame, no blank) */
+            lcd_fill(0, 0, 240, 240, C_BG);
         shown_help = ui.help;
-        lcd_fill(0, 0, 240, 240, C_BG);
         shown_scroll = -1;
         force = 1;
     }
@@ -1823,31 +1825,84 @@ static void draw_frame(void)
 }
 
 /* ------------------------------------------------------------- boot: a solar system --- */
-/* we fly on into the stars (streaming out from the middle, brighter the nearer); a solar system ahead, slowly
- * nearer: the sun, four round orbits, a planet on each (as on the orbit screen, twice as large) going round; the name;
- * then the planets go out to their corners and the sky stays: the orbit screen */
-#define BOOT_MS 2400u
-#define BOOT_NAME 1000u                            /* (the name: from here) */
-#define BOOT_OUT 1900u                             /* (the hand-over: from here to the end) */
+/* we fly on into the stars (streaming out from the middle, brighter the nearer); a solar system ahead, seen a little
+ * from above (its orbits ellipses, y x 0.6), coming nearer: the sun, four orbits, a planet on each (as on the orbit
+ * screen, twice as large; the far side smaller, behind the sun) going round, most of a turn; the name; then the
+ * planets go out to their corners and the sky stays: the orbit screen. Smooth: every place from the time (ms), and
+ * only the 8 x 8 tiles that changed go to the screen (their hashes against the last frame's), so the frames come
+ * fast and even; fades in steps (a fading band otherwise sends the whole band every frame). */
+#define BOOT_MS 3000u
+#define BOOT_NAME 1100u                            /* (the name: from here) */
+#define BOOT_OUT 2400u                             /* (the hand-over: from here to the end) */
+#define BOOT_TILT 154                              /* (/256: the orbits' height against their width) */
+static uint32_t boot_th[30u * 30u];                /* each tile's hash as on the screen (0: unknown, sent) */
+static uint8_t boot_handover;                      /* the boot's last frame is on the screen: the orbit screen's
+                                                      first frame draws over it (no blank between) */
+static void boot_push(uint32_t y0)                 /* the canvas (240 x 120 at row y0): its changed tiles out */
+{
+    uint16_t *tmp = cv_px + 240u * 120u;           /* (the canvas' spare rows: 960 pixels, a run of 15 tiles) */
+    uint32_t ty, tx, j, i;
+    for (ty = 0; ty < 15u; ty++) {
+        uint32_t *th = &boot_th[(y0 / 8u + ty) * 30u], ch = 0;
+        for (tx = 0; tx < 30u; tx++) {
+            const uint16_t *p = cv_px + ty * 8u * 240u + tx * 8u;
+            uint32_t h = 2166136261u;
+            for (j = 0; j < 8u; j++, p += 240)
+                for (i = 0; i < 8u; i++)
+                    h = (h ^ p[i]) * 16777619u;
+            h |= 1u;
+            if (h != th[tx])
+                th[tx] = h, ch |= 1u << tx;
+        }
+        while (ch) {                               /* runs of changed tiles, 15 at most each */
+            uint32_t t0 = 0, n = 0, w;
+            while (!((ch >> t0) & 1u))
+                t0++;
+            while (t0 + n < 30u && n < 15u && ((ch >> (t0 + n)) & 1u))
+                n++;
+            ch &= ~(((1u << n) - 1u) << t0);
+            w = n * 8u;
+            lcd_sync();                            /* (the last run's transfer reads tmp) */
+            for (j = 0; j < 8u; j++)
+                for (i = 0; i < w; i++)
+                    tmp[j * w + i] = cv_px[(ty * 8u + j) * 240u + t0 * 8u + i];
+            lcd_blit(t0 * 8u, y0 + ty * 8u, w, 8u, tmp);
+        }
+    }
+}
+static int32_t ease(int32_t v) { return (v * v >> 8) * (3 * 256 - 2 * v) >> 8; }   /* (smoothstep, 0 .. 256) */
 static void boot_frame(uint32_t t)
 {
-    static const int16_t ORB_R[NC] = {36, 58, 80, 102};      /* (the orbits, close up) */
+    static const int16_t ORB_R[NC] = {38, 60, 82, 104};      /* (the orbits, close up) */
     static const uint32_t TO[NC] = {0xE0000000u, 0x20000000u, 0xA0000000u, 0x60000000u};   /* (towards its corner) */
-    static const uint16_t PERIOD[NC] = {7000, 10000, 14000, 19000};   /* (ms a round: the inner ones faster) */
+    static const uint16_t PERIOD[NC] = {2600, 3400, 4400, 5600};   /* (ms a round: the inner ones faster) */
     static const uint8_t STARC[3] = {200, 215, 255}, RING[3] = {70, 110, 220};
-    int32_t half, k, c, in = clamp((int32_t)t * 256 / 350, 0, 256);
-    int32_t zt = clamp((int32_t)t * 256 / (int32_t)BOOT_OUT, 0, 256), zoom, out, nk, sysk;
-    zt = 256 - ((256 - zt) * (256 - zt) >> 8);     /* (nearer, slowing) */
+    int32_t half, k, c, pass, in = clamp((int32_t)t * 256 / 350, 0, 256);
+    int32_t zt = clamp((int32_t)t * 256 / 1000, 0, 256), zoom, out, nk, sysk, ringk;
+    int32_t px[NC], py[NC], pr[NC];
+    zt = 256 - ((256 - zt) * (256 - zt) >> 8);     /* (nearer, slowing; still from 1 s on) */
     zoom = 150 + (106 * zt >> 8);                  /* 0.59 .. 1 */
-    out = clamp(((int32_t)t - (int32_t)BOOT_OUT) * 256 / (int32_t)(BOOT_MS - BOOT_OUT), 0, 256);
-    out = (out * out >> 8) * (3 * 256 - 2 * out) >> 8;   /* (smoothstep) */
-    nk = clamp(((int32_t)t - (int32_t)BOOT_NAME) * 256 / 350, 0, 256) * (256 - clamp(((int32_t)t - 1850) * 256 / 250, 0, 256)) >> 8;
+    out = ease(clamp(((int32_t)t - (int32_t)BOOT_OUT) * 256 / (int32_t)(BOOT_MS - BOOT_OUT), 0, 256));
+    nk = clamp(((int32_t)t - (int32_t)BOOT_NAME) * 256 / 400, 0, 256) *
+         (256 - clamp(((int32_t)t - (int32_t)BOOT_OUT + 100) * 256 / 300, 0, 256)) >> 8;
+    nk = (nk + 16) >> 5 << 5;                      /* (in steps of 1/8: the band is sent only when it steps) */
     sysk = in * (256 - (nk * 140 >> 8)) >> 8;      /* (the sun and the orbits dimmer under the name) */
+    ringk = ((sysk * 3 / 5) * (256 - out) >> 8) >> 5 << 5;
+    for (c = 0; c < NC; c++) {                     /* the planets: going round; at the end out to their corners */
+        uint32_t a = TO[c] + (uint32_t)(((int32_t)t - (int32_t)BOOT_OUT) * (int32_t)(0xFFFFFFFFu / PERIOD[c]));
+        int32_t r = ORB_R[c] * zoom >> 8, cs = cosq(a), cx, cy;
+        int32_t x = 120 * 256 + ((sinq(a) * r) >> 7), y = 120 * 256 - ((((cs * r) >> 7) * BOOT_TILT) >> 8);   /* (1/256 px) */
+        corner_xy((uint32_t)c, &cx, &cy);
+        x += (cx * 256 - x) * out >> 8, y += (cy * 256 - y) * out >> 8;
+        px[c] = (x + 128) >> 8, py[c] = (y + 128) >> 8;
+        pr[c] = ((14 * zoom >> 8) * (256 - ((cs * 40 >> 15) * (256 - out) >> 8)) >> 8) - (7 * out >> 8);   /* (far: smaller) */
+        pr[c] = pr[c] * in >> 8;                   /* (coming out of the dark with the sun) */
+    }
     for (half = 0; half < 2; half++) {
         int32_t y0 = half * 120;
         cv_begin(240, 120, C_BG);
         cv_oy = -y0;
-        for (k = 0; k < 140; k++) {                /* the stars: out from the middle, a short streak, nearer brighter */
+        for (k = 0; k < 80; k++) {                 /* the stars: out from the middle, a short streak, nearer brighter */
             uint32_t h = hash3(k, 11, 3u), a = h << 8;
             int32_t z = 1000 - (int32_t)(((h >> 20) % 1000u + t * 45u / 64u) % 970u), r0, r1, s, kk;
             r0 = 26000 / z, r1 = 26000 / (z + 14);
@@ -1862,30 +1917,31 @@ static void boot_frame(uint32_t t)
             int32_t x, y;
             star_xy((uint32_t)k, &x, &y);
             if (y >= y0 && y < y0 + 120)
-                cv_add(x, y, STARC, star_k((uint32_t)k, t) * out >> 8);
+                cv_add(x, y, STARC, star_k((uint32_t)k, t) * (out >> 5 << 5) >> 8);
         }
-        for (c = 0; c < NC; c++) {                 /* the orbits */
-            int32_t r = ORB_R[c] * zoom >> 8, n = r * 6, kk = (sysk * 3 / 5) * (256 - out) >> 8;
-            if (y0 > 120 + r || y0 + 120 < 120 - r || kk <= 0)
+        for (c = 0; c < NC && ringk > 0; c++) {    /* the orbits: ellipses */
+            int32_t r = ORB_R[c] * zoom >> 8, ry = r * BOOT_TILT >> 8, n = r * 6;
+            if (y0 > 120 + ry || y0 + 120 < 120 - ry)
                 continue;
             for (k = 0; k < n; k++) {
                 uint32_t a = (uint32_t)k * (0xFFFFFFFFu / (uint32_t)n);
-                cv_add(120 + ((sinq(a) * r) >> 15), 120 - ((cosq(a) * r) >> 15), RING, kk);
+                cv_add(120 + ((sinq(a) * r) >> 15), 120 - ((cosq(a) * ry) >> 15), RING, ringk);
             }
         }
-        glow(120, 120, 20 * zoom >> 8, SUN, sysk * (256 - out) >> 8);   /* the sun */
-        glow(120, 120, 8 * zoom >> 8, (const uint8_t[]){200, 225, 255}, (sysk * 3 / 4) * (256 - out) >> 8);
-        disc(120, 120, (4 * zoom >> 8) * (256 - out) >> 8, rgbk((const uint8_t[]){225, 240, 255}, sysk * (256 - out) >> 8));
-        for (c = 0; c < NC; c++) {                 /* the planets: going round; at the end out to their corners */
-            uint32_t a = TO[c] + (uint32_t)(((int32_t)t - (int32_t)BOOT_OUT) * (int32_t)(0xFFFFFFFFu / PERIOD[c]));
-            int32_t r = ORB_R[c] * zoom >> 8, x = 120 + ((sinq(a) * r) >> 15), y = 120 - ((cosq(a) * r) >> 15), cx, cy;
-            corner_xy((uint32_t)c, &cx, &cy);
-            x += (cx - x) * out >> 8, y += (cy - y) * out >> 8;
-            if (y + 30 < y0 || y - 30 >= y0 + 120)
-                continue;
-            planet_r0 = (14 * zoom >> 8) - (7 * out >> 8);
-            sc.pw[c] = 0;
-            planet((uint32_t)c, x, y, 0);
+        for (pass = 0; pass < 2; pass++) {         /* the far planets, the sun, the near planets */
+            if (pass) {
+                int32_t sk = (sysk * (256 - out) >> 8) >> 5 << 5;
+                glow(120, 120, 20 * zoom >> 8, SUN, sk);
+                glow(120, 120, 8 * zoom >> 8, (const uint8_t[]){200, 225, 255}, sk * 3 / 4);
+                disc(120, 120, (4 * zoom >> 8) * (256 - out) >> 8, rgbk((const uint8_t[]){225, 240, 255}, sk));
+            }
+            for (c = 0; c < NC; c++) {
+                if ((py[c] >= 120) != pass || pr[c] < 2 || py[c] + 30 < y0 || py[c] - 30 >= y0 + 120)
+                    continue;
+                planet_r0 = pr[c];
+                sc.pw[c] = 0;
+                planet((uint32_t)c, px[c], py[c], 0);
+            }
         }
         planet_r0 = 0;
         if (nk) {                                  /* the name, on a band of shade */
@@ -1904,7 +1960,7 @@ static void boot_frame(uint32_t t)
             text_c(120, 142, &FONT_S, "by genkigenki", RGB(150 * nk >> 8, 160 * nk >> 8, 210 * nk >> 8));
         }
         cv_oy = 0;
-        cv_blit(0, (uint32_t)y0);
+        boot_push((uint32_t)y0);
     }
 }
 
@@ -1916,17 +1972,18 @@ static void boot_anim(void)
         fm1_wdt_feed();
         if (t > BOOT_MS || (fm1_in.keys && t > 300u))
             break;
-        boot_frame(t);
-        fm1_delay_ms(10);
+        boot_frame(t);                             /* (as fast as it goes: the places follow the time) */
     }
-    lcd_fill(0, 0, 240, 240, C_BG);
+    boot_frame(BOOT_MS);                           /* (the planets in their corners: the orbit screen takes over) */
+    lcd_sync();
+    boot_handover = 1;
 }
 
-static void splash(void)                           /* before the audio runs: the name only */
+static void splash(void)                           /* before the audio runs: the boot's first frame (stars only) */
 {
-    lcd_fill(0, 0, 240, 240, RGB(1, 2, 10));
-    cv_begin(240, 50, RGB(1, 2, 10));
-    text_c(120, 0, &FONT_XL, "VECTOR37", RGB(120, 170, 255));
-    cv_blit(0, 96);
+    uint32_t i;
+    for (i = 0; i < 30u * 30u; i++)
+        boot_th[i] = 0;
+    boot_frame(0);
     lcd_sync();
 }
