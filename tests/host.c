@@ -508,6 +508,35 @@ static void test_paths(void)
     }
 }
 
+/* WARP Y at its left end (as the Lissajous sounds set it): every family still its figure, never a plain circle (the
+ * radius varies by more than 10 %), but Lissajous at 1:1 (MORPH -64) */
+static void test_not_circle(void)
+{
+    static const int16_t MO[3] = {-64, 0, 63};
+    uint32_t f, m, i, bad = 0;
+    double worst = 1;
+    for (f = 0; f < SH_N; f++)
+        for (m = 0; m < 3; m++) {
+            patch_t p;
+            double lo = 1e9, hi = 0;
+            patch_init(&p);
+            p.g[G_SHAPE] = (int16_t)(f * FAM_STEP), p.g[G_WARPY] = -64, p.g[G_WARPX] = 0, p.g[G_MORPH] = MO[m];
+            orbit_follow(p.g, 1);
+            for (i = 0; i < 512; i++) {
+                int32_t x, y;
+                double r;
+                orbit_path(i * (0xFFFFFFFFu / 512u), i * (0xFFFFFFFFu / 512u), &x, &y);
+                r = sqrt((double)x * x + (double)y * y);
+                lo = fmin(lo, r), hi = fmax(hi, r);
+            }
+            if (f == 0 && m == 0)
+                continue;                              /* (Lissajous 1:1: the circle) */
+            worst = fmin(worst, (hi - lo) / hi);
+            bad += (hi - lo) / hi <= 0.10;
+        }
+    check("WARP Y -64: no family a circle (but 1:1)", bad == 0, "least radius variation %.2f, %.0f circles", worst, bad);
+}
+
 static void retrig_note(uint32_t b)               /* (decaying sounds: the note again every 0.75 s) */
 {
     if (b % (FS * 3 / 4 / CTL) == 0) {
@@ -621,6 +650,7 @@ int main(int argc, char **argv)
     test_modes();
     test_presets();
     test_paths();
+    test_not_circle();
     test_motion();
     test_cost();
     printf(fails ? "host: %d FAILED\n" : "host: all ok\n", fails);
