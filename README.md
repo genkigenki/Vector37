@@ -1,6 +1,6 @@
-# Vector37
+<p align="center"><img src="docs/img/readme-banner.png" width="100%" alt="Vector37: an orbiting overtone synth for the SMK-37, its orbit screen"></p>
 
-![Vector37](docs/img/banner.png)
+# Vector37
 
 ![Vector37 playing](docs/img/orbit.webp)
 
