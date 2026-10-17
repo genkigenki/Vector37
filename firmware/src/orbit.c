@@ -162,15 +162,16 @@ static int orbit_all_adsr(void) { return fam_q8(&ost.p) >= 4 * 256; }   /* (the 
 
 /* size, rotation, centre: the path where it sits. SIZE goes to x 1.41, but never past what fits (orbit_fit): a path
  * too big for the square stops growing; it is never squashed against an edge */
-static void orbit_place(int32_t *x, int32_t *y)
+static void orbit_place_spin(int32_t *x, int32_t *y, uint32_t spin)   /* (the screen: where the path was turned) */
 {
-    uint32_t a = ((uint32_t)ost.p.rot << 17) + ost.spin;
+    uint32_t a = ((uint32_t)ost.p.rot << 17) + spin;
     int32_t s = (ost.p.size * 365) >> 8, c = cosq(a), n = sinq(a), x0 = *x, y0 = *y;
     int32_t xr = (x0 * c - y0 * n) >> 15, yr = (x0 * n + y0 * c) >> 15;
     s = s < ost.slim ? s : ost.slim;
     *x = clamp(((ost.p.cx * 512) >> 8) + ((xr * s) >> 15), -32767, 32767);
     *y = clamp(((ost.p.cy * 512) >> 8) + ((yr * s) >> 15), -32767, 32767);
 }
+static void orbit_place(int32_t *x, int32_t *y) { orbit_place_spin(x, y, ost.spin); }
 
 /* the largest scale (Q15) at which the path, turned and moved, stays inside the square: 128 points round (and a
  * star's tips exactly) */

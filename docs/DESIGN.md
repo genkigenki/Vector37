@@ -183,7 +183,7 @@ stock firmware's rate; `LCD_BAUD=2 sh build.sh` builds 20 MHz, untested on the S
   while the DMA sends this one. The pad LEDs share SPI1 (another pin group): they go out between frames, after the
   last transfer (padled_flush).
 - **Only the canvas' part is visited.** Glows, discs, a planet's body, the bubbles' triangles and text visit only the
-  rows and columns the strip holds; the path and the moon's trail skip 32 points at a time whose box misses the strip;
+  rows and columns the strip holds; the path skips 32 points at a time whose box misses the strip, the moon's trail each piece whose box misses it;
   the stars' places are a table; the glow's falloff is two multiplications instead of two divisions a pixel (exact:
   the reciprocal rounded up is exact while the dividend times the divisor stays under 2^32). The screens are the same
   bit for bit: built with the old pace (`-DUI_FIELD_MS=28u -DUI_LOOP_MS=15u`), tests/screen.c's 76 screens match
@@ -192,6 +192,13 @@ stock firmware's rate; `LCD_BAUD=2 sh build.sh` builds 20 MHz, untested on the S
   draw.c; before: 15 and 28, a field frame every 30 ms); a frame that takes longer is followed at once. What moved by
   the frame now moves by the time (a planet's zoom, the stars' twinkle, the sun's tail and the moon's trail: a place
   every ~30 ms), so the screen looks the same, only smoother.
+- **The moon's trail follows its curve.** A place every ~30 ms; where two places lie more than 3 pixels apart (a
+  fast moon: it goes round the sun, the sun along the path, between them) the way between is filled in once, when
+  the piece is complete, from the path and the moon's ring (the phases kept with each place, the speeds, SPIN turned
+  back), a point every 2 pixels at most; the piece to the moon anew each frame. So it is one line along the way the
+  moon went, never straight chords across the orbit (0.3 drew those, and left pieces behind as they aged out: the
+  oldest piece's tiles were not marked). A very fast moon's filled-in way is kept to about 480 pixels.
+  tests/screen.c checks it at MOON SPEED 127 (no piece over 3 pixels, nothing of it left on the screen).
 
 tests/fps.c runs the firmware's ui.c and draw.c on the simulated panel with the main loop timed as the device would
 run it: the drawing's host time x K (K: the device's time for the host's on a fixed piece of the earlier drawing, its

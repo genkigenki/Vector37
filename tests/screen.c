@@ -757,8 +757,11 @@ int main(int argc, char **argv)
             }
             lit[k2] = 0;
             for (m = 0; m < 4u; m++) {                 /* (four moments: the moon may pass under a planet or the sun) */
-                for (g = 0, k = 2; k < 8u && k < mt_n; k++) {   /* (just behind the moon: drawn, green) */
-                    int32_t x = mt[mt_idx(k)].x >> 4, y = mt[mt_idx(k)].y >> 4, dx, dy;
+                static int16_t tw[4096][2];
+                uint32_t tn = trail_walk(tw, 4096u);
+                for (g = 0, k = 2; k < 8u && k + 1u < tn; k++) {   /* (just behind the moon: drawn, green; the trail's
+                                                      points as drawn: the places, or the way filled in between) */
+                    int32_t x = tw[k + 1u][0] >> 4, y = tw[k + 1u][1] >> 4, dx, dy;
                     uint32_t best = 0;
                     for (dy = -1; dy <= 1; dy++)
                         for (dx = -1; dx <= 1; dx++) {
@@ -776,7 +779,8 @@ int main(int argc, char **argv)
                span[0], maxseg[0], lit[0], span[1], lit[1]);
         check("the moon's trail, slow: smooth (no piece longer than 4 pixels), lit right behind the moon",
               (sc.shown & SH_TRAIL) && maxseg[0] <= 64 && lit[0] > 6u * 25u);
-        check("... fast: at least 0.5 s of its way, lit right behind it", span[1] >= 480u && lit[1] > 6u * 25u);
+        check("... fast: at least 0.5 s of its way (or, filled in along its curve, 400 pixels of it), lit right behind it",
+              (span[1] >= 480u || mt_len >= 400u * 16u) && lit[1] > 6u * 25u);
         pt.g[G_SUBSPD] = s0, pt.g[G_SUBSZ] = z0, pt.g[G_RATE] = r0;
         panel_ms(500);
     }
@@ -1132,6 +1136,61 @@ int main(int argc, char **argv)
         check("START SOUND 6 (0..15: FACTORY, as before)", ui.bank == BK_F1 && ui.preset == 5u);
         settings.preset = 0;
         settings_save();
+    }
+    {   /* the moon's trail at full speed (MOON SPEED 127: many turns between two frames): one line along the way the
+         * moon went, never chords across the orbit, nothing of it left on the screen when it moves on; also with a
+         * small path turning (SPIN) and a large one */
+        static uint16_t was[240 * 240];
+        static const struct { uint8_t snd, size; int8_t spin; } T[3] = {{7, 127, 0}, {0, 50, 40}, {3, 127, -30}};
+        uint32_t t, f, i, gap = 0, stale = 0, nmin = 100000u, loops = 0;
+        for (t = 0; t < 3u; t++) {
+            preset_load(T[t].snd);
+            pt.g[G_SUBSPD] = 127, pt.g[G_SIZE] = T[t].size, pt.g[G_SPIN] = T[t].spin;
+            panel_key(12, 1, 100), panel_key(16, 1, 100);
+            panel_ms(800);
+            for (f = 0; f < 8u; f++) {
+                panel_ms(97);
+                static int16_t tw[4096][2];
+                uint32_t tn = trail_walk(tw, 4096u);
+                for (i = 0; i + 1u < tn; i++) {
+                    int32_t dx = abs(tw[i + 1u][0] - tw[i][0]), dy = abs(tw[i + 1u][1] - tw[i][1]);
+                    gap = (uint32_t)(dx > dy ? dx : dy) > gap ? (uint32_t)(dx > dy ? dx : dy) : gap;
+                }
+                nmin = tn < nmin ? tn : nmin;
+                loops += tn > mt_n + 1u;           /* (some way filled in) */
+                memcpy(was, fb, sizeof was);       /* (the whole sky drawn anew: the trail's pixels the same) */
+                field_forget();
+                field_rect(SX0, SY0, SX1, SY1);
+                for (i = 0; i < 240u * 240u; i++)
+                    if (was[i] != fb[i]) {
+                        uint16_t c = was[i] > fb[i] ? was[i] : fb[i];
+                        uint32_t pc, near = 0;
+                        for (pc = 0; pc < NC; pc++) {   /* (a planet: its own pace, drawn again as it changes enough) */
+                            int32_t px, py;
+                            corner_xy(pc, &px, &py);
+                            near |= abs((int32_t)(i % 240u) - px) <= PL_OUT && abs((int32_t)(i / 240u) - py) <= PL_OUT;
+                        }
+                        if (near)
+                            continue;
+                        uint32_t r = c >> 11, g = (c >> 5) & 63u, b = c & 31u;
+                        {   /* (green, the trail: a piece missing or left behind; a star's twinkle, a step, is not) */
+                            int32_t dg = (int32_t)((was[i] >> 5) & 63u) - (int32_t)((fb[i] >> 5) & 63u);
+                            stale += g > 2u * r + 4u && g > 2u * b && r < 20u && (dg > 6 || dg < -6);
+                        }
+                    }
+                memcpy(fb, was, sizeof was);
+                field_forget();
+            }
+            if (t == 0u)
+                shot("moon_trail_fast");
+            panel_key(12, 0, 0), panel_key(16, 0, 0);
+            pt.g[G_SPIN] = 0;
+            panel_ms(400);
+        }
+        printf("  info the moon's trail at full speed: %u points at least, the longest piece %u/16 px, filled in %u of 24 "
+               "frames, %u green pixels left behind\n", nmin, gap, loops, stale);
+        check("the moon's trail at full speed: connected along its way (no piece over 3 pixels), nothing left behind",
+              gap <= 48u && nmin > 40u && loops > 0u && stale == 0u);
     }
     printf(fails ? "screen: %d FAILED\n" : "screen: all ok\n", fails);
     return fails != 0;

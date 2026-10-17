@@ -144,7 +144,7 @@ static struct {
     uint32_t thash;                                /* (the path's key) */
     int16_t sx, sy, mx, my, mr;                    /* sun, moon, the moon's ring radius */
     int32_t sx16, sy16, mr16, mx16, my16;          /* the sun, the moon's ring radius, the moon, 1/16 pixels */
-    uint32_t mph;                                  /* the moon's phase round the sun */
+    uint32_t mph, oph;                             /* the moon's phase round the sun; the sun's on the path */
     uint8_t msrc;                                  /* (whose moon: a voice, or 255 the free orbit) */
     int16_t trx[TRAIL_N], try_[TRAIL_N];           /* the comet's tail, newest first (sampled: an ADSR walk, focus) */
     uint8_t ntr;
@@ -1170,37 +1170,169 @@ static void central_draw(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
  * steps (by age). As long as one turn of the moon takes, but at least 0.5 s: a place every frame, or for a slow moon
  * (a turn longer than the ring holds frames) evenly every turn / 1000, the last piece always reaching the moon. A
  * frame draws again only the newest pieces, the pieces that went and the ones that dimmed a step */
-#define MT_N 1024                                  /* (8 bytes a place) */
-static struct { int16_t x, y; uint16_t t; uint8_t lv; } mt[MT_N];   /* (1/16 pixels; ms, 16 bits; its step) */
+#define MT_N 448                                   /* (~13 s of places at one each 30 ms) */
+/* the moon's trail: its places (newest first, one each ~30 ms), each the older end of a piece to the newer one (piece
+ * 0: to the moon now). Where a piece is long (a fast moon: round the sun, the sun along the path, between two
+ * places) the way between is filled in from the path and the moon's ring (the phases at the newer end, the speeds
+ * then), once, when the piece is complete, so the trail follows the curve the moon went and never cuts across; the
+ * piece to the moon is filled in anew each frame. Each piece keeps its box (its tiles marked when it changes) */
+static struct {
+    int16_t x, y;                                  /* (1/16 pixels) */
+    uint16_t t;                                    /* (ms, 16 bits) */
+    uint8_t lv;                                    /* (its step of brightness, by its age) */
+    uint8_t fill;                                  /* (the piece to the newer place filled in) */
+    uint32_t oph, sph;                             /* (the sun's and the moon's phases here) */
+    uint32_t pa;                                   /* (the filled-in points: from mp[pa % MP_N], np of them) */
+    uint16_t np, len;                              /* (... and the piece's length along, 1/16 pixels) */
+    int16_t b[4];                                  /* (the piece's box, 1/16 pixels: x0 y0 x1 y1) */
+} mt[MT_N] __attribute__((section(".pool")));
 #define MT_AGE(k) ((uint16_t)((uint16_t)fm1_ms - mt[mt_idx(k)].t))
 static uint32_t mt_w, mt_n;
 static uint8_t mt_src = 254;
 static int16_t mt_hx = -1, mt_hy;                  /* (the moon, as the last piece was drawn to it) */
 static const int16_t MT_K[7] = {0, 35, 70, 110, 150, 195, 245};
-static int16_t mtb[MT_N / 32u][4];                 /* (each 32 pieces' box, 1/16 pixels: field_draw skips the rest) */
-static uint32_t mt_idx(uint32_t k);
-static void mt_boxes(void)
-{
-    uint32_t i;
-    for (i = 0; i < mt_n && mt_hx >= 0; i++) {
-        int16_t *b = mtb[i / 32u];
-        int16_t ax = i ? mt[mt_idx(i - 1u)].x : mt_hx, ay = i ? mt[mt_idx(i - 1u)].y : mt_hy, bx = mt[mt_idx(i)].x, by = mt[mt_idx(i)].y;
-        int16_t lx = ax < bx ? ax : bx, hx = ax > bx ? ax : bx, ly = ay < by ? ay : by, hy = ay > by ? ay : by;
-        if (!(i & 31u))
-            b[0] = lx, b[1] = ly, b[2] = hx, b[3] = hy;
-        b[0] = lx < b[0] ? lx : b[0], b[1] = ly < b[1] ? ly : b[1], b[2] = hx > b[2] ? hx : b[2], b[3] = hy > b[3] ? hy : b[3];
-    }
-}
+#define MP_N 2048                                  /* (the filled-in points, all pieces: a ring) */
+#define TL_SUB 48                                  /* (a piece longer than 3 pixels: filled in) */
+#define TL_LEN (480 * 16)                          /* (at most 480 pixels of filled-in way: a very fast moon's swirl) */
+static int16_t mp[MP_N][2];
+static uint32_t mp_w, mt_len;                      /* (points written; the filled-in pieces' length) */
+#define HP_N 256
+static int16_t hp[HP_N][2], hb[4];                 /* (the piece to the moon: its points, its box) */
+static uint32_t hn;
+static uint8_t hfill;
 static uint32_t mt_idx(uint32_t k) { return (mt_w + MT_N * 4u - 1u - k) % MT_N; }   /* k: 0 the newest */
 static void rq_add(int32_t x0, int32_t y0, int32_t x1, int32_t y1);
-static void mt_mark(uint32_t k)                    /* the piece from point k to the newer one (k 0: to the moon) */
+static void tl_at(uint32_t oph, uint32_t sph, uint32_t spin, int32_t *x, int32_t *y)   /* the moon at these phases, the
+                                                                                      path turned so (1/16 pixels) */
 {
-    int32_t ax, ay, bx, by;
+    int32_t px, py, r = clamp((ost.p.sub * 160) >> 8, 0, 30000);   /* (as the engine places the moon: sub_at) */
+    orbit_path(oph, oph, &px, &py);
+    orbit_place_spin(&px, &py, spin);
+    px = clamp(px + ((sinq(sph) * r) >> 15), -32767, 32767), py = clamp(py - ((cosq(sph) * r) >> 15), -32767, 32767);
+    *x = FX0 * 16 + (((px + 32768) * (FW - 1)) >> 12), *y = FY0 * 16 + (((py + 32768) * (FW - 1)) >> 12);
+}
+static int tl_curve(void)                          /* the moon's place: the path's and the ring's (not an ADSR walk) */
+{
+    return !focus && !(sc.msrc != 255u && orbit_all_adsr()) && fam_q8(&ost.p) <= 3 * 256;
+}
+static void box_add(int16_t *b, int32_t x, int32_t y)
+{
+    b[0] = (int16_t)(x < b[0] ? x : b[0]), b[1] = (int16_t)(y < b[1] ? y : b[1]);
+    b[2] = (int16_t)(x > b[2] ? x : b[2]), b[3] = (int16_t)(y > b[3] ? y : b[3]);
+}
+/* the way from (ax, ay) (phases ao, as at ta ms) back to (bx, by) (at tb): points no more than 2 pixels apart into
+ * out (at most max), its box into b; returns how many, *len its length */
+static uint32_t tl_fill(int32_t ax, int32_t ay, uint32_t ao, uint32_t as, uint16_t ta, int32_t bx, int32_t by, uint16_t tb,
+                        int16_t (*out)[2], uint32_t max, uint32_t step0, int16_t *b, uint32_t *len)
+{
+    uint32_t oinc = freeze ? 0u : orbit_inc(), sinc = freeze ? 0u : SUB_RATE[pt.g[G_SUBSPD] & 127];
+    uint32_t spi = freeze ? 0u : (uint32_t)spin_inc(), n = 0, at = 0, span = (uint16_t)(ta - tb) * 1378u, st;
+    uint32_t back = (uint16_t)((uint16_t)fm1_ms - ta) * 1378u;   /* (SPIN: turned back from now, thousandths of a tick) */
+    int32_t px = ax, py = ay, l = 0;
+    b[0] = b[2] = (int16_t)ax, b[1] = b[3] = (int16_t)ay;
+    box_add(b, bx, by);
+    if ((bx > ax ? bx - ax : ax - bx) <= TL_SUB && (by > ay ? by - ay : ay - by) <= TL_SUB) {
+        *len = 0;
+        return 0;
+    }
+    st = span / 8u + 1u;
+    while (at < span && n < max) {                 /* (to the older place itself) */
+        int32_t nx, ny, d;
+        for (;;) {                                 /* (no further than 2 pixels a step: halved; in thousandths of a tick:
+                                                      a fast moon goes more than that in one) */
+            uint64_t tk;
+            st = st > span - at ? span - at : st;
+            tk = at + st;
+            tl_at(ao - (uint32_t)((uint64_t)oinc * tk / 1000u), as - (uint32_t)((uint64_t)sinc * tk / 1000u),
+                  ost.spin - (uint32_t)((int64_t)(int32_t)spi * (int64_t)(tk + back) / 1000), &nx, &ny);
+            d = (nx - px > 0 ? nx - px : px - nx) + (ny - py > 0 ? ny - py : py - ny);
+            if (d <= 32 || st <= 16u)
+                break;
+            st >>= 1;
+        }
+        at += st;
+        if (d < 12)
+            st <<= 1;                              /* (closer than a pixel: longer steps) */
+        if (at >= span)
+            break;                                 /* (the older place itself: its own point) */
+        out[n][0] = (int16_t)nx, out[n][1] = (int16_t)ny, n++;
+        box_add(b, nx, ny);
+        l += d, px = nx, py = ny;
+    }
+    (void)step0;
+    *len = (uint32_t)l;
+    return n;
+}
+static void mt_mark(uint32_t k)                    /* piece k (from place k to the newer one; 0: to the moon): its box */
+{
+    const int16_t *b;
     if (k >= mt_n || (!k && mt_hx < 0))
         return;
-    ax = mt[mt_idx(k)].x, ay = mt[mt_idx(k)].y;
-    bx = k ? mt[mt_idx(k - 1u)].x : mt_hx, by = k ? mt[mt_idx(k - 1u)].y : mt_hy;
-    rq_add((ax < bx ? ax : bx) / 16 - 2, (ay < by ? ay : by) / 16 - 2, (ax > bx ? ax : bx) / 16 + 4, (ay > by ? ay : by) / 16 + 4);
+    b = k ? mt[mt_idx(k)].b : hb;
+    rq_add(b[0] / 16 - 2, b[1] / 16 - 2, b[2] / 16 + 4, b[3] / 16 + 4);
+}
+static void mt_drop(void)                          /* the oldest place gone (its piece marked while it is there) */
+{
+    mt_mark(mt_n - 1u);
+    if (mt[mt_idx(mt_n - 1u)].fill)
+        mt_len -= mt[mt_idx(mt_n - 1u)].len;
+    mt_n--;
+}
+static void head_fill(void)                        /* the piece to the moon now */
+{
+    uint32_t l;
+    if (!mt_n || mt_hx < 0) {
+        hn = 0, hfill = 0;
+        return;
+    }
+    if (tl_curve())
+        hn = tl_fill(mt_hx, mt_hy, sc.oph, sc.mph, (uint16_t)fm1_ms, mt[mt_idx(0)].x, mt[mt_idx(0)].y, mt[mt_idx(0)].t, hp,
+                     HP_N, 0, hb, &l);
+    else {
+        hn = 0;
+        hb[0] = hb[2] = mt_hx, hb[1] = hb[3] = mt_hy;
+        box_add(hb, mt[mt_idx(0)].x, mt[mt_idx(0)].y);
+    }
+    hfill = (uint8_t)(hn != 0u);
+}
+static void piece_fill(void)                       /* a new place: the piece from it to the one before, complete */
+{
+    uint32_t e = mt_idx(1), l = 0, n = 0;
+    static int16_t tmp[512][2];
+    int16_t *b = mt[e].b;
+    const int32_t ax = mt[mt_idx(0)].x, ay = mt[mt_idx(0)].y;
+    if (tl_curve())
+        n = tl_fill(ax, ay, mt[mt_idx(0)].oph, mt[mt_idx(0)].sph, mt[mt_idx(0)].t, mt[e].x, mt[e].y, mt[e].t, tmp, 512u, 0,
+                    b, &l);
+    else
+        b[0] = b[2] = (int16_t)ax, b[1] = b[3] = (int16_t)ay, box_add(b, mt[e].x, mt[e].y);
+    while (mt_n > 2u && mp_w + n - mt[mt_idx(mt_n - 1u)].pa > MP_N)
+        mt_drop();                                 /* (no room for its points: the oldest give way) */
+    mt[e].pa = mp_w, mt[e].np = (uint16_t)n, mt[e].len = (uint16_t)(l > 65535u ? 65535u : l), mt[e].fill = (uint8_t)(n != 0u);
+    for (; n; n--, mp_w++)
+        mp[mp_w % MP_N][0] = tmp[mt[e].np - n][0], mp[mp_w % MP_N][1] = tmp[mt[e].np - n][1];
+    if (mt[e].fill)
+        mt_len += mt[e].len;
+    while (mt_n > 2u && mt[mt_idx(mt_n - 1u)].fill && mt_len - mt[mt_idx(mt_n - 1u)].len >= TL_LEN)
+        mt_drop();                                 /* (a very fast moon: its way, but not without end) */
+}
+/* every point of the trail as drawn, newest first (the moon, the filled-in way, each place): the host tests */
+static __attribute__((unused)) uint32_t trail_walk(int16_t (*out)[2], uint32_t max)
+{
+    uint32_t k, i, n = 0;
+    if (mt_hx < 0 || !mt_n)
+        return 0;
+    out[n][0] = mt_hx, out[n][1] = mt_hy, n++;
+    for (k = 0; k < mt_n && n < max; k++) {
+        const uint32_t e = mt_idx(k), np = k ? mt[e].np : hn;
+        for (i = 0; i < np && n < max; i++, n++) {
+            const int16_t *q = k ? mp[(mt[e].pa + i) % MP_N] : hp[i];
+            out[n][0] = q[0], out[n][1] = q[1];
+        }
+        if (n < max)
+            out[n][0] = mt[e].x, out[n][1] = mt[e].y, n++;
+    }
+    return n;
 }
 static uint32_t trail_ms(void)                     /* one turn of the moon, ms; at least 0.5 s */
 {
@@ -1216,23 +1348,28 @@ static void mh_take(void)
     if (sc.mr <= 2 || sc.msrc != mt_src) {         /* (no ring, another moon: the line anew) */
         for (k = 0; k < mt_n; k++)
             mt_mark(k);
-        mt_n = 0, mt_src = sc.msrc, mt_hx = -1;
+        mt_n = 0, mt_src = sc.msrc, mt_hx = -1, mt_len = 0, hn = 0;
         return;
     }
     mt_mark(0);                                    /* (the piece to the moon: where it was) */
     if (!mt_n || (MT_AGE(0) >= T / 1000u && MT_AGE(0) >= SAMPLE_MS)) {   /* (a new place: every ~30 ms, or every
                                                       turn / 1000) */
+        uint32_t e;
         if (mt_n == MT_N)
-            mt_mark(--mt_n);                       /* (the oldest gives way) */
-        mt[mt_w % MT_N].x = (int16_t)sc.mx16, mt[mt_w % MT_N].y = (int16_t)sc.my16, mt[mt_w % MT_N].t = (uint16_t)fm1_ms;
-        mt[mt_w % MT_N].lv = 6;
+            mt_drop();                             /* (the oldest gives way) */
+        e = mt_w % MT_N;
+        mt[e].x = (int16_t)sc.mx16, mt[e].y = (int16_t)sc.my16, mt[e].t = (uint16_t)fm1_ms;
+        mt[e].lv = 6, mt[e].oph = sc.oph, mt[e].sph = sc.mph, mt[e].fill = 0, mt[e].np = 0, mt[e].len = 0, mt[e].pa = mp_w;
         mt_w++, mt_n++;
+        if (mt_n > 1u)
+            piece_fill();
         mt_mark(1);
     }
     mt_hx = (int16_t)sc.mx16, mt_hy = (int16_t)sc.my16;
+    head_fill();
     mt_mark(0);                                    /* (the piece to the moon: where it is) */
     while (mt_n > 1u && MT_AGE(mt_n - 1u) > T)   /* (too old: gone) */
-        mt_mark(--mt_n);
+        mt_drop();
     for (k = 1; k < mt_n; k++) {                   /* each place's step, by its age */
         uint32_t age = MT_AGE(k);
         uint8_t lv = (uint8_t)(age >= T ? 1u : 1u + (T - age) * 6u / (T + 1u));
@@ -1241,7 +1378,6 @@ static void mh_take(void)
             mt_mark(k), mt_mark(k + 1u);
         }
     }
-    mt_boxes();
 }
 static int32_t lit_k(uint32_t t)                   /* lit: 256 while it changes, fading over 0.4 s after */
 {
@@ -1329,33 +1465,39 @@ static void field_draw(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
             }
         }
     }
-    for (i = 0; i < mt_n && mt_hx >= 0; i++) {     /* the moon's trail: the way it went, fading behind it */
-        int32_t ax0 = i ? mt[mt_idx(i - 1u)].x : mt_hx, ay0 = i ? mt[mt_idx(i - 1u)].y : mt_hy, bx = mt[mt_idx(i)].x, by = mt[mt_idx(i)].y;
-        int32_t dx = bx - ax0, dy = by - ay0, n, j, k = MT_K[i ? mt[mt_idx(i)].lv % 7u : 6u];
-        int32_t adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
-        if (!(i & 31u) && (mtb[i / 32u][0] / 16 - 2 >= x1 || mtb[i / 32u][2] / 16 + 3 <= x0 ||
-                           mtb[i / 32u][1] / 16 - 2 >= y1 || mtb[i / 32u][3] / 16 + 3 <= y0)) {
-            i += 31u;                              /* (32 pieces away from the strip: all skipped) */
-            continue;
-        }
-        if (adx > 640 || ady > 640)
-            continue;                              /* (a jump: no line) */
-        if ((ax0 < bx ? ax0 : bx) / 16 - 2 >= x1 || (ax0 > bx ? ax0 : bx) / 16 + 3 <= x0 ||
-            (ay0 < by ? ay0 : by) / 16 - 2 >= y1 || (ay0 > by ? ay0 : by) / 16 + 3 <= y0)
-            continue;
-        n = (adx > ady ? adx : ady) / 12 + 1;
-        for (j = 0; j < n; j++) {                  /* (soft: each step over its four pixels; two pixels wide) */
-            int32_t px = ax0 + dx * j / n, py = ay0 + dy * j / n, w;
-            for (w = 0; w < 2; w++) {
-                int32_t qx = px + (w && ady > adx ? 16 : 0), qy = py + (w && ady <= adx ? 16 : 0), kk = w ? k / 2 : k;
-                int32_t fx = qx & 15, fy = qy & 15, ax = qx >> 4, ay = qy >> 4;
-                cv_add(ax, ay, MOON, (16 - fx) * (16 - fy) * kk >> 8);
-                cv_add(ax + 1, ay, MOON, fx * (16 - fy) * kk >> 8);
-                cv_add(ax, ay + 1, MOON, (16 - fx) * fy * kk >> 8);
-                cv_add(ax + 1, ay + 1, MOON, fx * fy * kk >> 8);
+    for (i = 0; i < mt_n && mt_hx >= 0; i++) {     /* the moon's trail: the way it went, fading behind it; each piece:
+                                                      from the newer place through its filled-in way to this one */
+        const int16_t *b = i ? mt[mt_idx(i)].b : hb;
+        int32_t ax0 = i ? mt[mt_idx(i - 1u)].x : mt_hx, ay0 = i ? mt[mt_idx(i - 1u)].y : mt_hy, k = MT_K[i ? mt[mt_idx(i)].lv % 7u : 6u];
+        uint32_t v, np = i ? mt[mt_idx(i)].np : hn, pa = i ? mt[mt_idx(i)].pa : 0u;
+        if (b[0] / 16 - 2 >= x1 || b[2] / 16 + 3 <= x0 || b[1] / 16 - 2 >= y1 || b[3] / 16 + 3 <= y0)
+            continue;                              /* (the piece away from the strip) */
+        for (v = 0; v <= np; v++) {
+            int32_t bx = v < np ? (i ? mp[(pa + v) % MP_N][0] : hp[v][0]) : mt[mt_idx(i)].x;
+            int32_t by = v < np ? (i ? mp[(pa + v) % MP_N][1] : hp[v][1]) : mt[mt_idx(i)].y;
+            int32_t dx = bx - ax0, dy = by - ay0, n, j;
+            int32_t adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+            if (adx > 640 || ady > 640 ||          /* (a jump: no line) */
+                (ax0 < bx ? ax0 : bx) / 16 - 2 >= x1 || (ax0 > bx ? ax0 : bx) / 16 + 3 <= x0 ||
+                (ay0 < by ? ay0 : by) / 16 - 2 >= y1 || (ay0 > by ? ay0 : by) / 16 + 3 <= y0) {
+                ax0 = bx, ay0 = by;
+                continue;
             }
+            n = (adx > ady ? adx : ady) / 12 + 1;
+            for (j = 0; j < n; j++) {              /* (soft: each step over its four pixels; two pixels wide) */
+                int32_t px = ax0 + dx * j / n, py = ay0 + dy * j / n, w;
+                for (w = 0; w < 2; w++) {
+                    int32_t qx = px + (w && ady > adx ? 16 : 0), qy = py + (w && ady <= adx ? 16 : 0), kk = w ? k / 2 : k;
+                    int32_t fx = qx & 15, fy = qy & 15, ax = qx >> 4, ay = qy >> 4;
+                    cv_add(ax, ay, MOON, (16 - fx) * (16 - fy) * kk >> 8);
+                    cv_add(ax + 1, ay, MOON, fx * (16 - fy) * kk >> 8);
+                    cv_add(ax, ay + 1, MOON, (16 - fx) * fy * kk >> 8);
+                    cv_add(ax + 1, ay + 1, MOON, fx * fy * kk >> 8);
+                }
+            }
+            sc.shown |= SH_TRAIL;
+            ax0 = bx, ay0 = by;
         }
-        sc.shown |= SH_TRAIL;
     }
     for (i = 0; i < sc.nmoon; i++) {               /* the other voices */
         if (HIT(sc.ox[i], sc.oy[i], 4))
@@ -1574,6 +1716,7 @@ static void orbs_take(void)
     sc.sx16 = FX0 * 16 + ((((s ? s->ox : syn.ox) + 32768) * (FW - 1)) >> 12);
     sc.sy16 = FY0 * 16 + ((((s ? s->oy : syn.oy) + 32768) * (FW - 1)) >> 12);
     sc.mph = s ? s->sph : syn.sph, sc.msrc = (uint8_t)(s ? n : 255u);
+    sc.oph = s ? s->oph - (freeze ? 0u : orbit_inc()) : syn.oph;
     sc.mr16 = (r * (FW - 1)) >> 12;
     sc.mr = (int16_t)(focus ? 0 : (r * (FW - 1)) >> 16);
     sc.nmoon = 0;
