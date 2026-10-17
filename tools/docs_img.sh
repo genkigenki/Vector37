@@ -11,7 +11,9 @@ T=$(mktemp -d)
 mkdir -p "$T/s" "$T/a" docs/img
 cc -O2 -w -D_DEFAULT_SOURCE -Ibuild/gen -o "$T/screen" tests/screen.c
 cc -O2 -w -D_DEFAULT_SOURCE -Ibuild/gen -o "$T/anim" tools/anim.c
+cc -O2 -w -D_DEFAULT_SOURCE -Ibuild/gen -o "$T/fm1" tests/fm1_panel.c
 "$T/screen" "$T/s" >/dev/null
+"$T/fm1" "$T/s" >/dev/null                   # the FM-1's screens (fm1_*)
 "$T/anim" "$T/a"
 for n in 0 1 2 3 4 5 6 7; do mkdir -p "$T/p$n"; "$T/anim" "$T/p$n" $n; done
 mkdir -p "$T/f" "$T/g" "$T/pl"; "$T/anim" "$T/f" family; "$T/anim" "$T/g" glide; "$T/anim" "$T/pl" planet
@@ -27,6 +29,9 @@ keep = {"orbit_playing": "orbit", "orbit_idle": "orbit-idle", "knob_cutoff": "kn
         "guide_0": "guide-1", "guide_1": "guide-2", "guide_2": "guide-3", "guide_3": "guide-4", "guide_4": "guide-5", "guide_5": "guide-6",
         "shape_0": "shape-lissajous", "shape_1": "shape-star", "shape_2": "shape-spiro", "shape_3": "shape-pulse",
         "shape_4": "shape-adsr",
+        "fm1_page1_blend": "fm1-planet", "fm1_hold_fx": "fm1-hold-fx", "fm1_path_family": "fm1-path",
+        "wt_overview": "wt-overview", "hold_scale_wave": "hold-scale-wave",
+        "list_factory": "sounds-factory", "list_factory2": "sounds-factory2", "list_saved": "sounds-user",
         }
 for k, v in keep.items():
     Image.open(os.path.join(t, "s", k + ".ppm")).resize((480, 480), Image.NEAREST).save(os.path.join(out, "screen-" + v + ".png"))

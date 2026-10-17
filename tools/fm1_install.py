@@ -9,7 +9,7 @@ step 2, the loader reads the whole package and writes it. In both steps the
 device asks (SysEx read requests on the logical image) and we answer. Then
 the FM-1 restarts and the installed identity is checked.
 
-  fm1_install.py PACKAGE.fwsc [--port NAME] [--yes] [--force]
+  fm1_install.py PACKAGE.fwsc [--port NAME] [--yes] [--force] [--fm1]
   fm1_install.py --info [--port NAME]
 
 If the FM-1 is still in update mode (an earlier install was cut off), the
@@ -23,6 +23,11 @@ ota-FM-1_9XX or ota-SMK-37 Pro_9XX / _7XX (Makkuro37, Vector37), is resumed).
 
 Packages: 20 interleave blocks (FM-1, SLOOP, SMK-37 Pro up to v011) or more (the stock SMK-37 Pro
 v016 has 36: the extra markers are 0x7D); the count is detected and checked with the files' CRCs.
+
+A stock package (without SLOOP's loader) is checked by its contents, not by the identity it or the
+device reports: one laid out for the FM-1 (flash.bin's length, its region table) is never written to an
+SMK-37, and to a device that reports an FM-1 only when the user confirms it is one (--fm1, or the
+question): an SMK-37 running a third-party FM-1 firmware reports an FM-1 too.
 """
 import argparse
 import queue
@@ -46,7 +51,8 @@ DELAY = {"open": 0.3, "start": 2.0, "reply": 0.01, "loader": 3.0, "reboot": 3.0,
          "wait_loader": 30.0, "wait_reboot": 40.0}
 
 EXIT = {"usage": 2, "badpkg": 2, "notfound": 3, "model": 6, "lost": 4, "stopped": 4, "badreq": 4,
-        "noloader": 5, "noreturn": 5, "mismatch": 6, "foreign": 6}
+        "noloader": 5, "noreturn": 5, "mismatch": 6, "foreign": 6,
+        "fm1pkg": 6, "board": 6, "fm1confirm": 6}
 
 
 class InstallError(Exception):
@@ -405,9 +411,13 @@ class Updater:
         step("done", back.id.text)
         return back.id.text
 
-    def install(self, dev, image, product, step=lambda *a: None):
+    def install(self, dev, image, product, step=lambda *a: None, fm1_ok=False):
         """running firmware -> loader -> new firmware; dev from find(). A device already in
         update mode only needs the write."""
+        refusal = board_refusal(model_of(dev.id.text), image, fm1_ok)   # (the package's board, before anything)
+        if refusal:
+            dev.link.close()
+            raise refusal
         if not same_keyboard(dev.id.text, product):
             dev.link.close()
             raise InstallError("model", f"the device is {dev.id.text}, the package is for {product}")
@@ -490,6 +500,103 @@ def package_damage(image):
     return None
 
 
+# ---------------------------------------------------- the package's board ---
+# Read from the package itself, never from an identity: the FM-1's and the SMK-37's official packages share the
+# head (0x0-0x3FFF) and the update loader, and a third-party FM-1 firmware running on an SMK-37 reports an FM-1
+# identity. Installed on an SMK-37, the FM-1's stock package erases the factory calibration (BTIF / USRTRIM
+# 0xC0000-0xC1FFF) and writes the FM-1's USR image over the SMK's (0xF4000). The board: flash.bin's length (SMK-37
+# 0x9D000, FM-1 0x93000), its region table (app offset 0x60 = flash 0x4060-0x411F, SFC-enciphered with the chip
+# key 0x980F: BTIF and USR at 0xC0000 / 0xF4000 on the SMK-37, 0xE9000 / 0xEA000 on the FM-1) and where a USR
+# image (UFW entry 50) goes.
+FM1_STOCK_MSG = "This is the FM-1 firmware. Your keyboard is an SMK-37? Don't install it."
+FM1_CONFIRM_MSG = (FM1_STOCK_MSG + " On an SMK-37 it erases the keyboard's calibration. Install it only on an FM-1. "
+                   "SMK-37 owners whose keyboard runs an FM-1 firmware (it then reports an FM-1): use the SMK-37 "
+                   "package from M-Vave, never this one.")
+LAYOUT = {"smk": (0x9D000, 0xC0000, (0xF4000, 0xA000)), "fm1": (0x93000, 0xE9000, (0xEA000, 0x12000))}
+SMK_MODEL_RE = re.compile(r"(ota-)?(SMK-37([ +].*)?|MKE-P37|STARRYKEY-37.*)", re.I)   # the SMK-37 keyboard's names
+
+
+def _sfc(data, base, key=0x980F):
+    """the JieLi SFC cipher of the app area (32-byte blocks, its own inverse)"""
+    out = bytearray(data)
+    for i in range(0, len(out), 32):
+        k = (key ^ ((base + i) >> 2)) & 0xFFFF
+        for j in range(i, min(i + 32, len(out))):
+            out[j] ^= k & 0xFF
+            k = ((k << 1) ^ (0x1021 if k & 0x8000 else 0)) & 0xFFFF
+    return bytes(out)
+
+
+def package_files(image):
+    """[(type, offset, size, USR target, USR size)] from the UFW file list"""
+    if len(image) < 0x40:
+        return []
+    rd = lambda b, o, n: int.from_bytes(b[o:o + n], "little")  # noqa: E731
+    count = rd(_dec(image[0:0x40]), 8, 2)
+    out = []
+    for i in range(min(count, 11)):
+        if 0x90 + i * 0x50 > len(image):
+            break
+        e = _dec(image[0x40 + i * 0x50:0x90 + i * 0x50])
+        out.append((rd(e, 0, 2), rd(e, 8, 4), rd(e, 12, 4), rd(e, 0x1C, 4), rd(e, 0x20, 4)))
+    return out
+
+
+def region_table(flash):
+    """flash.bin's region table: {name: (address, size)}"""
+    if len(flash) < 0x4120:
+        return {}
+    t, out = _sfc(flash[0x4060:0x4120], 0x60), {}
+    for r in range(0, 0xC0, 32):
+        name = bytearray()
+        for c in t[r + 16:r + 32]:
+            if not 0x20 < c < 0x7F:
+                break
+            name.append(c)
+        if name:
+            out[name.decode()] = (int.from_bytes(t[r + 4:r + 8], "little"), int.from_bytes(t[r + 8:r + 12], "little"))
+    return out
+
+
+def package_board(image):
+    """"smk", "fm1" (any sign of the FM-1's layout) or None (not a package, or another layout)"""
+    files = package_files(image)
+    fl = next((f for f in files if f[0] == 0), None)
+    if not fl or fl[1] + fl[2] > len(image):
+        return None
+    rt = region_table(image[fl[1]:fl[1] + fl[2]])
+    usr = [(f[3], f[4]) for f in files if f[0] == 50]
+    s_len, s_btif, s_usr = LAYOUT["smk"]
+    f_len, f_btif, f_usr = LAYOUT["fm1"]
+    if fl[2] == s_len and rt.get("BTIF", (0,))[0] == s_btif and rt.get("USR") == s_usr and all(u == s_usr for u in usr):
+        return "smk"
+    if fl[2] == f_len or rt.get("BTIF", (0,))[0] == f_btif or rt.get("USR", (0,))[0] == f_usr[0] or \
+            any(u[0] == f_usr[0] for u in usr):
+        return "fm1"
+    return None
+
+
+def is_stock(image):
+    """a stock package (M-Vave's, or any without our update loader): flash.bin, and a loader that is not ours"""
+    return any(f[0] == 0 for f in package_files(image)) and LOADER_MARK not in image
+
+
+def board_refusal(model, image, fm1_ok=False):
+    """None, or why image must not be written to a device reporting model (nothing is sent): "fm1pkg" an FM-1
+    layout for an SMK-37; "board" a stock package not laid out for the SMK-37 on one; "fm1confirm" such a stock
+    package on a device reporting another model (an FM-1, or an SMK-37 under an FM-1 firmware), unless the user
+    confirmed the device is an FM-1 (fm1_ok)"""
+    board, smk = package_board(image), bool(SMK_MODEL_RE.fullmatch(model))
+    if smk and board == "fm1":
+        return InstallError("fm1pkg", f"{FM1_STOCK_MSG} (The device reports {model}.) Nothing was sent.")
+    if not is_stock(image) or board == "smk":
+        return None
+    if smk:
+        return InstallError("board", "this package is not laid out for the SMK-37 (flash.bin, region table): "
+                                     "nothing was sent")
+    return None if fm1_ok else InstallError("fm1confirm", FM1_CONFIRM_MSG + " If the device is an FM-1: --fm1.")
+
+
 def not_found(up):
     names = up.backend.input_names()
     where = f"no MIDI port matching {up.port!r} answered" if up.port else "FM-1 not found"
@@ -543,9 +650,14 @@ def run(a, backend, out, ask):
         dev.link.close()
         print("cancelled", file=out)
         return 1
+    fm1_ok = a.fm1                       # a stock package not laid out for the SMK-37: only on an FM-1, confirmed
+    if (not fm1_ok and not a.yes and is_stock(image) and package_board(image) != "smk"
+            and not SMK_MODEL_RE.fullmatch(model_of(dev.id.text))):
+        print(FM1_CONFIRM_MSG, file=out)
+        fm1_ok = ask("Is the device an FM-1 (not an SMK-37)? [y/N] ")
     prog = Progress(out)
     try:
-        up.install(dev, image, product, prog)
+        up.install(dev, image, product, prog, fm1_ok)
     finally:
         prog.end()
     return 0
@@ -565,6 +677,7 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
     ap.add_argument("--port", metavar="NAME", help="MIDI port to use (part of its name)")
     ap.add_argument("--yes", action="store_true", help="do not ask for confirmation")
     ap.add_argument("--force", action="store_true", help="install a package without the Felucca loader marker")
+    ap.add_argument("--fm1", action="store_true", help="the device is an FM-1: a stock package not laid out for the SMK-37 may be written (never to an SMK-37)")
     a = ap.parse_args(argv)
     if bool(a.info) == bool(a.package):
         ap.error("give a PACKAGE.fwsc or --info")

@@ -4,7 +4,7 @@
 # Vector37: Copyright (C) 2026 M. Geisler (makkuro)
 """Build Vector37: the app, the update loader and an installable .fwsc package.
 
-  tools/build.py [--release X.Y] [--model pro|elite|mke]
+  tools/build.py [--release X.Y] [--model pro|elite|mke] [--board smk37|fm1]
 
 Outputs in build/: vector37.bin (app), loader/ota.bin (update loader), vector37.fwsc (package).
 
@@ -13,6 +13,10 @@ layout and app slot (fm1pkg_make.py).
 MODEL=elite / mke (or --model): the same build under the SMK-37 Elite's or the MKE-P37's model name
 (identity SMK-37 Elite_700 / MKE-P37_700, the loader's, the recovery's and the update record's name too;
 -DSMK_MODEL), so M-Vave's updater still takes that unit's factory package; build/vector37-elite.fwsc, -mke.fwsc.
+BOARD=fm1 (or --board fm1): the M-Vave FM-1 (experimental): no BOARD_SMK37 flag (its panel firmware/src/panel_fm1.c),
+identity FM-1_700 (release FM-1_7XY), the FM-1 flash layout and app slot, the FM-1 update loader (the loader's
+sources without the SMK flag); build/vector37-fm1.fwsc. It writes the same build/ intermediates: build the SMK
+packages again before tests/run_tests.sh.
 
 The JieLi toolchain is Linux x86-64 only. JIELI_TOOLCHAIN points at it; on
 macOS (or with JIELI_DOCKER=1) each tool runs in a linux/amd64 container.
@@ -54,8 +58,9 @@ SDK_SHA256 = {
 
 PRODUCT = "SMK-37 Pro_700"          # package identity; release builds are SMK-37 Pro_7XY
 BOARD = "smk37"
-BOARD_PREFIX = {"smk37": "SMK-37 Pro_7"}
-BOARD_DEFS = {"smk37": ["-DBOARD_SMK37=1"]}
+BOARD_PREFIX = {"smk37": "SMK-37 Pro_7", "fm1": "FM-1_7"}
+BOARD_DEFS = {"smk37": ["-DBOARD_SMK37=1"], "fm1": []}      # fm1: no flag (fm1_cc.h: BOARD_SMK37 0)
+BOARD_PRODUCT = {"smk37": None, "fm1": "FM-1_700"}         # (None: fm1pkg_make's)
 # smk37: the keyboard's model name (MODEL env or --model); one hardware, three names. pro adds no flag
 MODELS = {"pro": "SMK-37 Pro", "elite": "SMK-37 Elite", "mke": "MKE-P37"}
 VERSION = None                      # MK_VERSION for release builds (default: firmware/src/vector37.c)
@@ -182,6 +187,11 @@ def build_app():
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
     if VERSION:
         flags.append(f'-DMK_VERSION="{VERSION}"')
+    if os.environ.get("LCD_BAUD"):  # the LCD SPI clock, lsb / (LCD_BAUD + 1): 4 (12 MHz, the stock rate) unless set
+        b = int(os.environ["LCD_BAUD"])
+        if not 0 <= b <= 15:
+            raise SystemExit("LCD_BAUD: 0 .. 15")
+        flags.append(f"-DLCD_BAUD={b}u")
     tc_all(("cc", "-c", FW / "crt0.S", "-o", OUT / "crt0.o"),
            ("cc", "-c", FW / "hal" / "fm1_vec.S", "-o", OUT / "fm1_vec.o"),
            ("cc", "-c", FW / "hal" / "fm1_isr.S", "-o", OUT / "fm1_isr.o"),
@@ -311,15 +321,22 @@ def main():
     ap.add_argument("--release", metavar="X.Y", help="release build: identity SMK-37 Pro_7XY, version string X.Y")
     ap.add_argument("--model", choices=sorted(MODELS), default=None,
                     help="the model name, pro (default), elite or mke (default: $MODEL, else pro)")
+    ap.add_argument("--board", choices=sorted(BOARD_DEFS), default=None,
+                    help="smk37 (default) or fm1 (the FM-1, experimental) (default: $BOARD, else smk37)")
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
     a = ap.parse_args()
     model = (a.model or os.environ.get("MODEL") or "pro").lower()
     if model not in MODELS:
         raise SystemExit(f"MODEL={model}: pro, elite or mke")
+    BOARD = (a.board or os.environ.get("BOARD") or "smk37").lower().replace("-", "")
+    if BOARD not in BOARD_DEFS:
+        raise SystemExit(f"BOARD={BOARD}: smk37 or fm1")
+    if BOARD == "fm1" and model != "pro":
+        raise SystemExit("MODEL is an SMK-37 name: not with BOARD=fm1")
     fm1pkg_make.set_board(BOARD)
     APP_SLOT = fm1pkg_make.APP_SLOT
-    stem = "vector37"
-    PRODUCT = fm1pkg_make.BOARDS[BOARD][2]
+    stem = "vector37" if BOARD == "smk37" else "vector37-" + BOARD
+    PRODUCT = BOARD_PRODUCT[BOARD] or fm1pkg_make.BOARDS[BOARD][2]
     if model != "pro":              # another model name: identity, loader and update record (fm1_cc.h SMK_MODEL)
         BOARD_DEFS[BOARD] = [*BOARD_DEFS[BOARD], f'-DSMK_MODEL="{MODELS[model]}"']
         PRODUCT = PRODUCT.replace(MODELS["pro"], MODELS[model])

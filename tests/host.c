@@ -378,7 +378,7 @@ static void test_presets(void)
 {
     uint32_t n;
     printf(" presets (a chord 3 s, released, another; WAV)\n");
-    for (n = 0; n < NPRESET; n++) {
+    for (n = 0; n < NFACT; n++) {
         patch_t p;
         char name[48], what[48];
         double ns;
@@ -395,6 +395,143 @@ static void test_presets(void)
     }
 }
 
+static int cmpd(const void *a, const void *b);
+/* the loudness: K-weighted (ITU-R BS.1770: the shelf and the high-pass), the loudest 0.4 s window (every 0.1 s),
+ * LUFS; of pcm[0 .. nframes) */
+static double loud_max(void)
+{
+    static double kl[MAXF], kr[MAXF];
+    double best = -120, w0, A = pow(10, 4.0 / 40), al, cw, b[2][3], a[2][3];
+    uint32_t i, s, ch, st, win = FS * 4 / 10;
+    w0 = 2 * M_PI * 1500 / FS, cw = cos(w0), al = sin(w0) / (2 * sqrt(0.5));      /* the shelf: +4 dB, 1.5 kHz */
+    b[0][0] = A * ((A + 1) + (A - 1) * cw + 2 * sqrt(A) * al), b[0][1] = -2 * A * ((A - 1) + (A + 1) * cw);
+    b[0][2] = A * ((A + 1) + (A - 1) * cw - 2 * sqrt(A) * al), a[0][0] = (A + 1) - (A - 1) * cw + 2 * sqrt(A) * al;
+    a[0][1] = 2 * ((A - 1) - (A + 1) * cw), a[0][2] = (A + 1) - (A - 1) * cw - 2 * sqrt(A) * al;
+    w0 = 2 * M_PI * 38 / FS, cw = cos(w0), al = sin(w0) / (2 * 0.5);              /* the high-pass: 38 Hz */
+    b[1][0] = (1 + cw) / 2, b[1][1] = -(1 + cw), b[1][2] = (1 + cw) / 2;
+    a[1][0] = 1 + al, a[1][1] = -2 * cw, a[1][2] = 1 - al;
+    for (ch = 0; ch < 2; ch++) {
+        double *o = ch ? kr : kl;
+        for (i = 0; i < nframes; i++)
+            o[i] = pcm[2 * i + ch] / 32768.0;
+        for (st = 0; st < 2; st++) {
+            double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+            for (i = 0; i < nframes; i++) {
+                double x = o[i], y = (b[st][0] * x + b[st][1] * x1 + b[st][2] * x2 - a[st][1] * y1 - a[st][2] * y2) / a[st][0];
+                x2 = x1, x1 = x, y2 = y1, y1 = y, o[i] = y;
+            }
+        }
+    }
+    for (s = 0; s + win <= nframes; s += FS / 10) {
+        double e = 0;
+        for (i = s; i < s + win; i++)
+            e += kl[i] * kl[i] + kr[i] * kr[i];
+        e /= win;
+        if (e > 0)
+            best = fmax(best, -0.691 + 10 * log10(e));
+    }
+    return best;
+}
+
+/* the demos: each factory sound played as it is meant (a chord, a bass line, a melody, held keys for an arpeggio),
+ * to OUTDIR/demo_NN_NAME.wav; the loudest 0.4 s of each (K-weighted): FACTORY 2 within 3 dB of the factory sounds'
+ * median, none silent, none clipped (the master's limiter: no more than a few samples) */
+enum { DM_CHORDS, DM_BASS, DM_LEAD, DM_HOLD, DM_KEYS };
+static const uint8_t DEMO[NFACT] = {DM_CHORDS, DM_BASS, DM_KEYS, DM_LEAD, DM_CHORDS, DM_HOLD, DM_LEAD, DM_CHORDS,
+                                    DM_CHORDS, DM_KEYS, DM_CHORDS, DM_BASS, DM_KEYS, DM_LEAD, DM_CHORDS, DM_HOLD,
+                                    DM_CHORDS, DM_CHORDS, DM_CHORDS, DM_CHORDS, DM_KEYS, DM_KEYS, DM_KEYS, DM_KEYS,
+                                    DM_BASS, DM_BASS, DM_HOLD, DM_HOLD, DM_CHORDS, DM_LEAD, DM_CHORDS, DM_HOLD};
+static uint32_t demo_kind;
+static void demo_script(uint32_t b)
+{
+    static const uint8_t CH[4][3] = {{48, 55, 64}, {45, 52, 60}, {41, 48, 57}, {43, 50, 59}};   /* C Am F G */
+    static const uint8_t BL[16] = {36, 36, 48, 36, 43, 36, 46, 48, 33, 33, 45, 33, 41, 43, 45, 47};
+    static const uint8_t ML[16] = {72, 74, 76, 79, 76, 74, 72, 69, 67, 69, 72, 74, 72, 0, 67, 72};
+    static const uint8_t KY[8] = {60, 64, 67, 72, 71, 67, 64, 62};
+    uint32_t t = b * CTL, k, step, e;
+    switch (demo_kind) {
+    case DM_CHORDS:                                /* four chords, two seconds each */
+        step = FS * 2;
+        for (k = 0; k < 4; k++) {
+            uint32_t on = k * step, off = on + step - FS / 10;
+            if (t <= on && on < t + CTL)
+                for (e = 0; e < 3; e++) ev_push(EV_ON, CH[k][e], 96);
+            if (t <= off && off < t + CTL)
+                for (e = 0; e < 3; e++) ev_push(EV_OFF, CH[k][e], 0);
+        }
+        break;
+    case DM_BASS:                                  /* eighths at 120 BPM */
+    case DM_LEAD:                                  /* a melody, quarters at 120 */
+        step = demo_kind == DM_BASS ? FS / 4 : FS / 2;
+        for (k = 0; k < 16; k++) {
+            uint32_t on = k * step, off = on + step * 4 / 5, n = demo_kind == DM_BASS ? BL[k] : ML[k];
+            if (!n)
+                continue;
+            if (t <= on && on < t + CTL) ev_push(EV_ON, n, 100);
+            if (t <= off && off < t + CTL) ev_push(EV_OFF, n, 0);
+        }
+        break;
+    case DM_KEYS:                                  /* a broken chord, then the chord */
+        for (k = 0; k < 8; k++) {
+            uint32_t on = k * (FS / 3), off = on + FS / 3;
+            if (t <= on && on < t + CTL) ev_push(EV_ON, KY[k], 100);
+            if (t <= off && off < t + CTL) ev_push(EV_OFF, KY[k], 0);
+        }
+        if (t <= FS * 3 && FS * 3 < t + CTL)
+            for (e = 0; e < 3; e++) ev_push(EV_ON, CH[0][e], 100);
+        if (t <= FS * 6 && FS * 6 < t + CTL)
+            for (e = 0; e < 3; e++) ev_push(EV_OFF, CH[0][e], 0);
+        break;
+    default:                                       /* held keys (its arpeggio runs): a chord, then another */
+        for (k = 0; k < 2; k++) {
+            uint32_t on = k * FS * 4, off = on + FS * 4 - FS / 10;
+            if (t <= on && on < t + CTL)
+                for (e = 0; e < 3; e++) ev_push(EV_ON, CH[k * 2][e], 100);
+            if (t <= off && off < t + CTL)
+                for (e = 0; e < 3; e++) ev_push(EV_OFF, CH[k * 2][e], 0);
+        }
+    }
+}
+static void test_demos(void)
+{
+    uint32_t n, overs;
+    double lu[NFACT], med, t[NFACT];
+    printf(" the demos (each sound played as meant, WAV): the loudest 0.4 s, K-weighted (LUFS)\n");
+    for (n = 0; n < NFACT; n++) {
+        patch_t p;
+        char name[48];
+        preset_make(n, &p);
+        reset(&p);
+        demo_kind = DEMO[n];
+        syn.overs = 0;
+        render(9.0, demo_script);
+        overs = syn.overs;
+        lu[n] = loud_max();
+        snprintf(name, sizeof name, "demo_%02u_%s", n + 1, PRESET_NAME[n]);
+        for (char *c = name; *c; c++) if (*c == ' ' || *c == '.') *c = '_';
+        wav(name, pcm, nframes);
+        t[n] = lu[n];
+        printf("  info %2u %-14s %6.1f LUFS  peak %5.1f dBFS  limited %4.1f %% of the time\n", n + 1, PRESET_NAME[n], lu[n],
+               20 * log10(peak / 32768 + 1e-9), 100.0 * overs / nframes);
+        if (peak > 31000 || lu[n] < -40 || (n >= NPRESET && overs > nframes / 4u)) {   /* (FACTORY 2: the master's limiter
+                                                      in gain at most a quarter of the time) */
+            printf("  FAIL %u %s: %s\n", n + 1, PRESET_NAME[n], lu[n] < -40 ? "silent" : "too loud (near clipping, or limited)");
+            fails++;
+        }
+    }
+    qsort(t, NPRESET, sizeof *t, cmpd);           /* (the reference: FACTORY 1's median) */
+    med = (t[NPRESET / 2 - 1] + t[NPRESET / 2]) / 2;
+    {
+        double lo = 1e9, hi = -1e9;
+        for (n = NPRESET; n < NFACT; n++)
+            lo = fmin(lo, lu[n] - med), hi = fmax(hi, lu[n] - med);
+        check("FACTORY 2: within 3 dB of FACTORY 1's median", lo >= -3 && hi <= 3, "%+.1f .. %+.1f dB", lo, hi);
+        for (lo = 1e9, hi = -1e9, n = 0; n < NPRESET; n++)
+            lo = fmin(lo, lu[n] - med), hi = fmax(hi, lu[n] - med);
+        printf("  info FACTORY 1: %+.1f .. %+.1f dB of the median (%.1f LUFS)\n", lo, hi, med);
+    }
+}
+
 static int cmpd(const void *a, const void *b) { double x = *(const double *)a, y = *(const double *)b; return (x > y) - (x < y); }
 #define NBAND 7                                    /* octave bands 125 Hz .. 8 kHz */
 #define MAXW 600
@@ -404,8 +541,20 @@ static uint32_t spectrum_stats(uint32_t from, uint32_t to)
 {
     static double re[2048], im[2048];
     uint32_t s, i, k = 0, b;
+    double emax = 0;
+    for (s = 0; s + 2048 <= to; s += 1024) {       /* (the loudest window of the whole: what is 40 dB below it, a
+                                                      decay's tail in the noise floor, is not counted) */
+        double e = 0;
+        for (i = 0; i < 2048; i++)
+            e += mono[s + i] * mono[s + i];
+        emax = fmax(emax, e);
+    }
     for (s = from; s + 2048 <= to && k < MAXW; s += 1024) {
-        double e = 0, ec = 0, eb[NBAND] = {0};
+        double e = 0, ec = 0, eb[NBAND] = {0}, et = 0;
+        for (i = 0; i < 2048; i++)
+            et += mono[s + i] * mono[s + i];
+        if (et < emax * 1e-4)
+            continue;
         for (i = 0; i < 2048; i++)
             re[i] = mono[s + i] * (0.5 - 0.5 * cos(2 * M_PI * i / 2048)), im[i] = 0;
         fft(re, im, 2048);
@@ -428,6 +577,8 @@ static uint32_t spectrum_stats(uint32_t from, uint32_t to)
 static double pct(double *v, uint32_t n, double p)
 {
     static double t[MAXW];
+    if (!n)
+        return 0;                                  /* (nothing heard) */
     memcpy(t, v, n * sizeof *v);
     qsort(t, n, sizeof *t, cmpd);
     return t[(uint32_t)(p * (n - 1))];
@@ -438,7 +589,7 @@ static void test_paths(void)
 {
     uint32_t k, sz, rot, i;
     printf(" the paths (SIZE 127 fitted): the farthest reach (1.0 = the square's edge)%c", 10);
-    for (k = 0; k < NPRESET; k++) {
+    for (k = 0; k < NFACT; k++) {
         patch_t p;
         int32_t worst = 0, reach = 0;
         char what[48];
@@ -553,7 +704,7 @@ static void test_motion(void)
     uint32_t n, k, c, b, d;
     printf(" the orbit heard (C3 held 6 s, dry): centroid p10..p90, the largest octave-band swing p10..p90;\n"
            " each corner alone (focus): centroid, the most different pair's mean band difference, the level spread\n");
-    for (k = 0; k < NPRESET; k++) {
+    for (k = 0; k < NFACT; k++) {
         patch_t p;
         double c10, c90, swing = 0, cc[NC], cb[NC][NBAND], rl[NC], mn = 1e9, mx = 0, rmax = -1e9, rmin = 1e9, dist = 0;
         char what[64];
@@ -575,6 +726,8 @@ static void test_motion(void)
             render(0.8, hold_note);
             rl[c] = 20 * log10(rms_ + 1e-9);
             n = spectrum_stats(FS / 10, nframes);   /* (the first 0.7 s: the bells still ring) */
+            if (n < 4u)
+                n = spectrum_stats(0, nframes);    /* (a drum: gone by then; from its start) */
             cc[c] = pct(cen_w, n, 0.5);
             for (b = 0; b < NBAND; b++)
                 cb[c][b] = pct(band_w[b], n, 0.5);
@@ -595,6 +748,188 @@ static void test_motion(void)
                swing, cc[0], cc[1], cc[2], cc[3], log2(mx / mn), dist, rmax - rmin, rl[0] - rmax, rl[1] - rmax, rl[2] - rmax,
                rl[3] - rmax);
         fails += !ok;
+    }
+}
+
+/* stereo: WIDTH 0 (the voices' spread 0, effects off): L == R; WIDTH full: the balance follows the orbit's side
+ * (the planets 1, 3 left; 2, 4 right; the moon's x), the gains constant power (L + R never cancels); a demo WAV */
+static int32_t opan_w[MAXF / 1024];
+static void opan_note(uint32_t b)
+{
+    hold_note(b);
+    if ((b * CTL) % 1024u == 0u && b * CTL / 1024u < MAXF / 1024)
+        opan_w[b * CTL / 1024u] = vs[0].opan;
+}
+static void test_stereo(void)
+{
+    patch_t p;
+    uint32_t i, k, nw, diff = 0;
+    double sxy = 0, sx = 0, sy = 0, sxx = 0, syy = 0, lo = 1e9, hi = -1e9, corr, worst = 1e9;
+    preset_make(0, &p);
+    p.g[G_RVMIX] = p.g[G_DLMIX] = p.g[G_CHMIX] = 0, p.g[G_DRIVE] = 0, p.g[G_STEREO] = 0;
+    p.g[G_WIDTH] = 0;
+    reset(&p);
+    memset(mst.dc, 0, sizeof mst.dc), memset(mst.dce, 0, sizeof mst.dce);   /* (the DC blocker: as from cold) */
+    on_note = 48;
+    render(4.0, hold_note);
+    for (i = 0; i < nframes; i++)
+        diff += pcm[2 * i] != pcm[2 * i + 1];
+    check("WIDTH 0: L == R (mono, as before)", diff == 0, "%.0f samples differ%.0s", diff, 0);
+    p.g[G_WIDTH] = 127;
+    reset(&p);
+    render(8.0, opan_note);
+    nw = nframes / 1024 - 1;
+    for (k = 2; k < nw; k++) {                         /* each 1024-sample window: balance against the orbit's side */
+        double el = 0, er = 0, em = 0, bal, x;
+        for (i = k * 1024; i < k * 1024 + 1024; i++) {
+            double l = pcm[2 * i], r = pcm[2 * i + 1];
+            el += l * l, er += r * r, em += (l + r) * (l + r);
+        }
+        bal = (sqrt(er) - sqrt(el)) / (sqrt(er) + sqrt(el) + 1e-9);
+        x = (opan_w[k] + opan_w[k + 1]) / 2.0;
+        sxy += x * bal, sx += x, sy += bal, sxx += x * x, syy += bal * bal;
+        lo = fmin(lo, bal), hi = fmax(hi, bal);
+        worst = fmin(worst, sqrt(em) / (sqrt(el) + sqrt(er) + 1e-9));
+    }
+    nw -= 2;
+    corr = (sxy - sx * sy / nw) / sqrt((sxx - sx * sx / nw) * (syy - sy * sy / nw) + 1e-30);
+    wav("stereo_width_full", pcm, nframes);
+    check("WIDTH full: the balance follows the orbit", corr > 0.8 && hi - lo > 0.6, "correlation %.2f, balance swing %.2f",
+          corr, hi - lo);
+    check("... mono sum: L + R never cancels", worst > 0.95, "lowest |L+R| / (|L|+|R|) %.3f%.0s", worst, 0);
+    preset_make(0, &p);                                /* the demo: NEBULA PAD as it is, then WIDTH full */
+    p.g[G_WIDTH] = 127;
+    reset(&p);
+    render(9.0, preset_script);
+    wav("stereo_demo_nebula_width_full", pcm, nframes);
+}
+
+/* the wavetables (W1..W8): every bank sounds; band-limited at high notes at its first, middle and last frame (as the
+ * overtone patterns); the position morphs the timbre without clicks (a knob sweeping it; the orbit moving it); the
+ * frames come from the flash only when the position crosses into another frame */
+static patch_t wt_patch(uint32_t bank, int32_t pos, int32_t orbit)
+{
+    patch_t p = solo_patch((int32_t)(PAT_W1 + bank), 0, 0, 0);
+    uint32_t c;
+    for (c = 0; c < NC; c++)
+        p.c[c][CP_WP1] = (int16_t)pos, p.c[c][CP_WO1] = (int16_t)orbit;
+    return p;
+}
+static int32_t wt_sweep_pos;
+static void wt_sweep(uint32_t b)                   /* WT POS 0 .. 127 over 4 s, a note held */
+{
+    hold_note(b);
+    pt.c[0][CP_WP1] = (int16_t)clamp((int32_t)(b * CTL * 127u / (FS * 4u)), 0, 127);
+    wt_sweep_pos = pt.c[0][CP_WP1];
+}
+static void test_wavetables(void)
+{
+    static double re[16384], im[16384];
+    uint32_t bank, fr, note, i, n;
+    double worst = 0, hiw = -200;
+    printf(" wavetables (W1..W8 %s .. %s): band-limiting, morph, the flash\n", N_WT[0], N_WT[WT_NB - 1]);
+    for (bank = 0; bank < WT_NB; bank++) {         /* each bank sounds */
+        patch_t p = wt_patch(bank, 64, 0);
+        char what[48];
+        reset(&p);
+        focus = 1, on_note = 48;
+        render(0.6, hold_note);
+        snprintf(what, sizeof what, "W%u %s sounds (C3, frame 16)", bank + 1, N_WT[bank]);
+        check(what, rms_ > 1000 && peak < 32700, "rms %.0f peak %.0f", rms_, peak);
+    }
+    for (bank = 0; bank < WT_NB; bank++)           /* aliasing: C4 .. C7 at the first, middle, last frame */
+        for (fr = 0; fr < 3; fr++)
+            for (note = 60; note <= 96; note += 12) {
+                patch_t p = wt_patch(bank, (int32_t)(fr * 127 / 2), 0);
+                double f0 = 440 * pow(2, ((int)note - 69) / 12.0), on = 0, off = 0, hi = 0, r;
+                reset(&p);
+                focus = 1, on_note = note;
+                render(0.8, hold_note);
+                for (i = 0; i < 16384; i++) {
+                    double w = 0.5 - 0.5 * cos(2 * M_PI * i / 16384);
+                    re[i] = mono[FS / 4 + i] * w, im[i] = 0;
+                }
+                fft(re, im, 16384);
+                for (i = 4; i < 8192; i++) {
+                    double hz = i * (double)FS / 16384, e = re[i] * re[i] + im[i] * im[i], h = hz / f0;
+                    if (fabs(h - floor(h + 0.5)) * f0 < 25)
+                        on += e;
+                    else
+                        off += e;
+                    if (hz > 16000)
+                        hi += e;
+                }
+                r = off / (on + 1e-30);
+                worst = fmax(worst, r);
+                hiw = fmax(hiw, 10 * log10(hi / (on + off) + 1e-30));
+            }
+    check("wavetables band-limited: 8 banks x 3 frames, C4..C7", worst < 1e-3,
+          "worst off-harmonic energy %.1f dB, above 16k %.1f dB", 10 * log10(worst + 1e-30), hiw);
+    {   /* a knob sweeping WT POS (SCAN, the resonance up the harmonics): the timbre moves, no clicks */
+        patch_t p = wt_patch(0, 0, 0);
+        double c10, c90, base = 0, sweep = 0;
+        reset(&p);
+        focus = 1, on_note = 48;
+        render(1.0, hold_note);
+        for (i = FS / 2; i < nframes; i++) base = fmax(base, fabs(mono[i] - 2 * mono[i - 1] + mono[i - 2]));
+        reset(&p);
+        focus = 1, on_note = 48;
+        wt_loads = 0;
+        render(4.0, wt_sweep);
+        wav("wt_scan_sweep", pcm, nframes);
+        for (i = FS / 2; i < nframes; i++) sweep = fmax(sweep, fabs(mono[i] - 2 * mono[i - 1] + mono[i - 2]));
+        n = spectrum_stats(FS / 4, nframes);
+        c10 = pct(cen_w, n, 0.1), c90 = pct(cen_w, n, 0.9);
+        check("WT POS swept (SCAN): the timbre moves", c90 > c10 * 3, "centroid p10..p90 %.0f..%.0f Hz", c10, c90);
+        /* (the SCAN frames' resonance itself has steep slopes: compare with a still sound of its brightest frame) */
+        {
+            patch_t q = wt_patch(0, 127, 0);
+            double b2 = 0;
+            reset(&q);
+            focus = 1, on_note = 48;
+            render(1.0, hold_note);
+            for (i = FS / 2; i < nframes; i++) b2 = fmax(b2, fabs(mono[i] - 2 * mono[i - 1] + mono[i - 2]));
+            base = fmax(base, b2);
+        }
+        check("... no clicks (the 2nd difference as a still frame's)", sweep < base * 1.5, "max 2nd difference %.0f vs %.0f",
+              sweep, base);
+        printf("  info frames loaded from the flash while sweeping 4 s: %u (2 per frame crossed; a voice, a generator)\n",
+               wt_loads);
+        check("... the flash read only when a frame is crossed", wt_loads <= 2u * 40u, "%.0f frame loads in 4 s%.0s",
+              (double)wt_loads, 0);
+    }
+    {   /* the orbit moving it: WT ORBIT 63, the moon round the sun on a big circle: the position follows the moon */
+        patch_t p = wt_patch(2, 0, 63);
+        int32_t lo = 1 << 30, hi = -1;
+        uint32_t b;
+        int32_t out[2 * CTL];
+        p.g[G_SIZE] = 127, p.g[G_RATE] = 6, p.g[G_SUBSZ] = 0, p.g[G_SHARP] = 1;
+        reset(&p);
+        ev_push(EV_ON, 48, 100);
+        for (b = 0; b < FS * 3 / CTL; b++) {
+            synth_block(out, CTL);
+            if (b > FS / CTL / 2)
+                lo = vs[0].wpos[0][0] < lo ? vs[0].wpos[0][0] : lo, hi = vs[0].wpos[0][0] > hi ? vs[0].wpos[0][0] : hi;
+        }
+        check("WT ORBIT: the moon nearing the planet moves the position (VOWEL)", hi - lo > 8 << 16,
+              "position %.1f .. %.1f frames", lo / 65536.0, hi / 65536.0);
+    }
+    {   /* the demo: WAVE ORBIT as it is, and before: its wavetables replaced by the classic pattern C (a saw's even half) */
+        patch_t p;
+        uint32_t c;
+        preset_make(8, &p);
+        reset(&p);
+        render(9.0, preset_script);
+        wav("wt_after_wave_orbit", pcm, nframes);
+        for (c = 0; c < NC; c++) {
+            if (PAT_IS_WT(p.c[c][CP_G1]))
+                p.c[c][CP_G1] = PAT_C;
+            if (PAT_IS_WT(p.c[c][CP_G2]))
+                p.c[c][CP_G2] = PAT_C;
+        }
+        reset(&p);
+        render(9.0, preset_script);
+        wav("wt_before_classic", pcm, nframes);
     }
 }
 
@@ -629,6 +964,29 @@ static void test_cost(void)
     printf("  cost (host): 1 voice %.0f ns/block, 8 voices %.0f ns/block (%.0f per voice), effects %.0f ns/block\n",
            ns1, ns8, (ns8 - ns1) / 7, nsfx);
     printf("  cost (host): 8 voices + effects = %.1f %% of real time\n", (ns8 + nsfx) / (CTL * 1e9 / FS) * 100);
+    {   /* the same with both generators of every corner a wavetable (the orbit moving them): the CPU budget */
+        double nsw, best8 = 1e30, bestw = 1e30;
+        int rep;
+        for (rep = 0; rep < 3; rep++) {            /* (the best of three: the host's timing is noisy) */
+            p.g[G_RVMIX] = p.g[G_DLMIX] = p.g[G_CHMIX] = 0, p.g[G_DRIVE] = 0;
+            for (c = 0; c < NC; c++)
+                p.c[c][CP_G1] = PAT_C, p.c[c][CP_G2] = PAT_D;
+            reset(&p);
+            focus = 5;
+            render(1.0, chord10);
+            best8 = fmin(best8, render(1.5, 0));
+            for (c = 0; c < NC; c++)
+                p.c[c][CP_G1] = (int16_t)(PAT_W1 + c), p.c[c][CP_G2] = (int16_t)(PAT_W1 + 4 + c), p.c[c][CP_WO1] = 63, p.c[c][CP_WO2] = -50;
+            reset(&p);
+            focus = 0;
+            render(1.0, chord10);
+            bestw = fmin(bestw, render(1.5, 0));
+        }
+        nsw = bestw;
+        printf("  cost (host): 8 voices, every generator a wavetable: %.0f ns/block vs %.0f classic (x %.2f), %.1f %% of real time\n",
+               nsw, best8, nsw / best8, nsw / (CTL * 1e9 / FS) * 100);
+        check("CPU budget: wavetables at most 1.6 x the classic patterns", nsw < best8 * 1.6, "x %.2f%.0s", nsw / best8, 0);
+    }
 }
 
 int main(int argc, char **argv)
@@ -652,6 +1010,9 @@ int main(int argc, char **argv)
     test_paths();
     test_not_circle();
     test_motion();
+    test_demos();
+    test_stereo();
+    test_wavetables();
     test_cost();
     printf(fails ? "host: %d FAILED\n" : "host: all ok\n", fails);
     return fails != 0;

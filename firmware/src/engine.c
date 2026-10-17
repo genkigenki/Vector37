@@ -115,13 +115,88 @@ static void noise_fill(voice_t *v, cstate_t *cs, uint32_t k, uint32_t inc, int32
     svf_coef(&f, inc_idx(inc), 40000);                 /* k 0.6: a resonant edge at the pitch */
     for (i = 0; i < CTL; i++) {
         int32_t w = (int32_t)xorshift(&v->rnd) >> 17;  /* white, +-16384; then Kellet's three poles */
-        b0 = ((b0 * 32691) >> 15) + ((w * 3245) >> 15);
-        b1 = ((b1 * 31556) >> 15) + ((w * 9716) >> 15);
+        b0 += ((b0 * -77) >> 15) + ((w * 3245) >> 15);  /* (b0 x 32691 / 32768, as b0 - b0 x 77 / 32768: */
+        b1 += ((b1 * -1212) >> 15) + ((w * 9716) >> 15); /* the same bits, no overflow for |b| up to 27 M) */
         b2 = ((b2 * 18678) >> 15) + ((w * 34494) >> 15);
         o[i] = (b0 + b1 + b2 + ((w * 6055) >> 15)) >> 1;
     }
     svf_run(&f, h, o, o, 2);
     pk[0] = b0, pk[1] = b1, pk[2] = b2;
+}
+
+/* ------------------------------------------------------------- wavetables --- */
+/* The banks W1..W8 (gen_tables.py: 8 x 32 frames, each in six band-limited levels, 136 KB) stay in the flash: the
+ * audio never reads the flash per sample. Each generator of each voice's corner has a frame cache in RAM: the two
+ * frames around its position, of the level its pitch needs, loaded when the position crosses into another frame
+ * or the pitch into another band (2 x 129 reads, a few times a second); per sample both are read (linear
+ * interpolation, as the overtone tables) and morphed by the position's fraction, ramped over the block: the timbre
+ * moves smoothly as the orbit moves. Level 0 holds four samples per highest harmonic (its top half faded), the
+ * levels above eight: the interpolation's mirror images stay ~31 dB or more below (every frame, C4..C7). */
+typedef struct { uint8_t bank, lvl; int16_t k; int32_t pos; int16_t fa[129], fb[129]; } wslot_t;
+static wslot_t wsl[NVOICE * NC * 2];       /* (RAM, .bss: 33.5 KB) */
+static uint32_t wt_loads;                  /* frames loaded (the host test: the flash reads) */
+typedef struct { const int16_t *a, *b; uint32_t sh; int32_t f, df; } wsrc_t;   /* a generator this block */
+#define WT_SPAN ((WT_NF - 1) << 16)        /* the last frame's position */
+
+static void wt_load(int16_t *d, uint32_t bank, uint32_t k, uint32_t lvl)
+{
+    const int16_t *s = WT_DATA + (bank * WT_NF + k) * WT_FR + WT_LVL_OFF[lvl];
+    uint32_t i, n = WT_LVL_N[lvl];
+    for (i = 0; i < n; i++)
+        d[i] = s[i];
+    d[n] = s[0];                           /* (the guard: tlu reads one past) */
+    wt_loads++;
+}
+/* how near the moon (x, y) is to corner c: the plain bilinear weight, Q15: 1 at the planet, 1/4 in the middle */
+static int32_t wt_near(uint32_t c, int32_t x, int32_t y)
+{
+    int32_t u = (x + 32768) >> 1, v = (y + 32768) >> 1;
+    u = c & 1u ? u : 32767 - u, v = c & 2u ? v : 32767 - v;
+    return (u * v) >> 15;
+}
+/* generator g of corner c: its position (frames x 65536) with the moon at (x, y): WT POS, plus WT ORBIT x how near
+ * the moon is to the planet (64: the whole bank as it reaches the planet; negative: backwards) */
+static int32_t wt_pos(const int16_t *cp, uint32_t g, int32_t x, int32_t y, uint32_t c)
+{
+    int32_t base = cp[g ? CP_WP2 : CP_WP1], amt = cp[g ? CP_WO2 : CP_WO1];
+    return clamp(base * WT_SPAN / 127 + ((amt * wt_near(c, x, y)) >> 6) * (WT_SPAN >> 15), 0, WT_SPAN);
+}
+/* generator g (0, 1) of corner c of voice v this block: bank pat - PAT_W1 at increment inc */
+static void wt_src(voice_t *v, uint32_t c, uint32_t g, uint32_t pat, uint32_t inc, wsrc_t *o)
+{
+    wslot_t *s = &wsl[((uint32_t)(v - vs) * NC + c) * 2u + g];
+    uint32_t b = OVT_B0, lvl, bank = pat - PAT_W1 + 1u;
+    int32_t p1 = clamp(v->wpos[c][g], 0, WT_SPAN), p0 = s->pos, k = p1 >> 16, f0;
+    while (b < OVT_B0 + OVT_NB - 1u && inc > (1u << (20u + b)))
+        b++;
+    lvl = b > 6u ? b - 6u : 0u;
+    if (s->bank != bank || s->lvl != lvl || s->k != k) {
+        if (s->bank != bank || s->lvl != lvl)  /* (another bank or band: no morph from the old frames) */
+            p0 = p1;
+        wt_load(s->fa, bank - 1u, (uint32_t)k, lvl);
+        wt_load(s->fb, bank - 1u, (uint32_t)(k + 1 < WT_NF ? k + 1 : k), lvl);
+        s->bank = (uint8_t)bank, s->lvl = (uint8_t)lvl, s->k = (int16_t)k;
+    }
+    f0 = clamp(p0 - (k << 16), 0, 65535);
+    s->pos = p1;
+    o->a = s->fa, o->b = s->fb, o->sh = WT_LVL_SH[lvl];
+    o->f = f0 >> 1, o->df = ((p1 - (k << 16)) - f0) / (2 * CTL);   /* (Q15, per sample) */
+}
+static void src_for(voice_t *v, uint32_t c, uint32_t g, uint32_t pat, uint32_t inc, wsrc_t *o)   /* any pattern but N */
+{
+    if (PAT_IS_WT(pat)) {
+        wt_src(v, c, g, pat, inc, o);
+        return;
+    }
+    o->a = o->b = table_for(pat, inc, &o->sh);
+    o->f = o->df = 0;
+}
+static inline int32_t wlu(const wsrc_t *s, uint32_t ph, int32_t i)   /* a sample, the two frames morphed */
+{
+    int32_t a = tlu(s->a, s->sh, ph);
+    if (s->a == s->b)
+        return a;
+    return a + (((tlu(s->b, s->sh, ph) - a) * (s->f + s->df * i)) >> 15);
 }
 
 /* ------------------------------------------------------------- a corner --- */
@@ -187,6 +262,77 @@ static void corner_render(voice_t *v, uint32_t c, int32_t (*tb)[CTL], uint32_t *
             y[i] = s + ((a * (((s * g2[i]) >> 13) - s)) >> 15);
         }
     w0 >>= 2, w1 >>= 2;                                /* (Q13) */
+    dw = (w1 - w0) / CTL;
+    if ((*used >> ft) & 1u)
+        for (i = 0; i < CTL; i++, w0 += dw)
+            o[i] += (y[i] * w0) >> 13;
+    else
+        for (i = 0; i < CTL; i++, w0 += dw)
+            o[i] = (y[i] * w0) >> 13;
+    *used |= 1u << ft;
+}
+
+/* the same with a wavetable as either generator (the generators read through wlu; added, G2's fundamental is taken
+ * out only for a classic pattern: a wavetable's has another level and phase) */
+static void corner_render_wt(voice_t *v, uint32_t c, int32_t (*tb)[CTL], uint32_t *used, int32_t w0, int32_t w1)
+{
+    const int16_t *cp = pt.c[c];
+    cstate_t *cs = &v->cs[c];
+    uint32_t inc = v->inc, ph = v->ph, i, ft = (uint32_t)cp[CP_FTYPE] % FT_N;
+    uint32_t m1 = RATIO_MUL[cp[CP_T1] % 5], m2 = RATIO_MUL[cp[CP_T2] % 5], p1 = (uint32_t)cp[CP_G1] % PAT_COUNT;
+    uint32_t p2 = (uint32_t)cp[CP_G2] % PAT_COUNT, mode = (uint32_t)cp[CP_BMODE] % BM_N;
+    int32_t b = cp[CP_BLEND], a = b < 0 ? -b * 512 : b * 520, y[CTL], g2[CTL], dw, *o = tb[ft];
+    wsrc_t s1 = {0}, s2 = {0};
+    if (a > 32767)
+        a = 32767;
+    if (p1 != PAT_N)
+        src_for(v, c, 0, p1, inc * m1, &s1);
+    if (p2 != PAT_N && b != 0)
+        src_for(v, c, 1, p2, inc * m2, &s2);
+    if (b != 0) {
+        if (p2 == PAT_N)
+            noise_fill(v, cs, 1, inc * m2, g2);
+        else if (b > 0 && (mode == BM_PDAM || mode == BM_RPDAM)) {
+            uint32_t kn = mode == BM_PDAM ? 0x80000000u - (uint32_t)a * 58982u : 0x80000000u + (uint32_t)a * 58982u;
+            uint32_t q1 = 0x80000000u / (kn >> 16), q2 = 0x80000000u / ((0u - kn) >> 16);
+            for (i = 0; i < CTL; i++) {
+                uint32_t q = (ph + i * inc) * m2;
+                q = q < kn ? (q >> 16) * q1 : 0x80000000u + ((q - kn) >> 16) * q2;
+                g2[i] = wlu(&s2, q, (int32_t)i);
+            }
+        } else
+            for (i = 0; i < CTL; i++)
+                g2[i] = wlu(&s2, (ph + i * inc) * m2, (int32_t)i);
+    }
+    if (p1 == PAT_N) {
+        noise_fill(v, cs, 0, inc * m1, y);
+        if (b < 0)
+            for (i = 0; i < CTL; i++)
+                y[i] += (g2[i] * a) >> 15;
+        else if (b > 0)
+            for (i = 0; i < CTL; i++)
+                y[i] += (a * (((y[i] * g2[i]) >> 13) - y[i])) >> 15;
+    } else if (b == 0) {
+        for (i = 0; i < CTL; i++)
+            y[i] = wlu(&s1, (ph + i * inc) * m1, (int32_t)i);
+    } else if (b < 0) {
+        int32_t sub = p2 != PAT_N && !PAT_IS_WT(p2);
+        for (i = 0; i < CTL; i++) {
+            int32_t o2 = g2[i] - (sub ? (sinq((ph + i * inc) * m2) * GEN_AMP) >> 15 : 0);
+            y[i] = wlu(&s1, (ph + i * inc) * m1, (int32_t)i) + ((o2 * a) >> 15);
+        }
+    } else if (mode == BM_PM || mode == BM_PMAM) {
+        uint32_t kpm = (uint32_t)(a >> 3) * 78u;
+        for (i = 0; i < CTL; i++) {
+            int32_t s = wlu(&s1, (ph + i * inc) * m1 + (uint32_t)g2[i] * kpm, (int32_t)i);
+            y[i] = mode == BM_PM ? s : s + ((a * (((s * g2[i]) >> 13) - s)) >> 15);
+        }
+    } else
+        for (i = 0; i < CTL; i++) {
+            int32_t s = wlu(&s1, (ph + i * inc) * m1, (int32_t)i);
+            y[i] = s + ((a * (((s * g2[i]) >> 13) - s)) >> 15);
+        }
+    w0 >>= 2, w1 >>= 2;
     dw = (w1 - w0) / CTL;
     if ((*used >> ft) & 1u)
         for (i = 0; i < CTL; i++, w0 += dw)
@@ -327,6 +473,7 @@ static void voice_start(voice_t *v, uint32_t note, uint32_t vel, uint32_t k, uin
                 v->w[c] = 0;
             v->gl = v->gr = 0;
             v->cut = -1;
+            v->wpos[0][0] = -1;                    /* (the wavetables' positions: set at once, no glide) */
         }
         if (!v->rnd)
             v->rnd = 0x2545F491u * (uint32_t)(v - vs + 1);
@@ -595,6 +742,24 @@ static void voice_tick(voice_t *v, uint32_t oinc, uint32_t sinc)
         v->wt[c] = (w[c] * (lv > 32767 ? 32767 : lv)) >> 15;
         if (solo && ((solo >> c) & 1u))                    /* a corner alone: heard whole */
             v->wt[c] = lv > 32767 ? 32767 : lv;
+    }
+    {   /* the wavetables' positions: the moon nearing the planet (a new note: at once, then gliding a little) */
+        int first = v->wpos[0][0] < 0;
+        for (c = 0; c < NC; c++) {
+            const int16_t *cp = pt.c[c];
+            uint32_t k;
+            for (k = 0; k < 2u; k++)
+                if (PAT_IS_WT((uint32_t)cp[k ? CP_G2 : CP_G1] % PAT_COUNT)) {
+                    int32_t q = wt_pos(cp, k, v->gx, v->gy, c);
+                    v->wpos[c][k] = first ? q : v->wpos[c][k] + ((q - v->wpos[c][k]) >> 2);
+                }
+        }
+        if (v->wpos[0][0] < 0)
+            v->wpos[0][0] = 0;
+    }
+    {   /* the orbit in stereo: the heard planets' sides (1, 3 left; 2, 4 right) weighted, and the moon's x */
+        int32_t s = v->wt[1] + v->wt[3] - v->wt[0] - v->wt[2], n = (v->wt[0] + v->wt[1] + v->wt[2] + v->wt[3]) >> 6;
+        v->opan = (clamp(n > 0 ? s * 512 / n : 0, -32767, 32767) + v->gx) >> 1;
     }
     cut >>= 15, res >>= 15;
     if (v->cut < 0)

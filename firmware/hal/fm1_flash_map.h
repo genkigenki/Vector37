@@ -78,24 +78,29 @@ _Static_assert(FL_DATA_HI <= FL_OTA_LO && FL_APP_HI <= FL_DATA_LO, "SMK: windows
 #define FL_PROTECTED(off, n) (FL_HITS(off, n, 0u, FL_HEAD_HI) || FL_HITS(off, n, FL_CAL_LO, FL_CAL_HI) ||                               FL_HITS(off, n, FL_USRRES_LO, FL_USRRES_HI) || (uint32_t)(off) >= FL_KEYMAC_LO ||                               (uint32_t)(n) > FL_KEYMAC_LO - (uint32_t)(off))
 #define FL_GUARD(off, n) (FL_RANGE_OK(off, n) && !FL_PROTECTED(off, n))
 #else /* FM-1 */
+/* ---- FM-1 flash map (Vector37's FM-1 build, BOARD=fm1; the fm1-to-smk37 guide, 01 and 10) ----
+ *   0x00000-0x03FFF  head (SPL, isd_config)                         NEVER
+ *   0x04000-0x92FFF  app area (PRCT)                                 update loader only
+ *   0x93000-0xDFFFF  VM: Felucca's store (another firmware's data)   not ours: never written
+ *   0xE0000-0xE4FFF  M-UPGRADE loader staging + update record (ota.c, record 0xE4F00)   FL_OTA
+ *   0xE5000-0xE7FFF  Felucca's autosave, FM6 voice bank              not ours: never written
+ *   0xE8000-0xFBFFF  the stock OTA's VM backup, BTIF, USR            NEVER
+ *   0xFC000-0xFEFFF  Felucca's settings                              not ours: never written
+ *   0xFF000-0xFFFFF  key_mac                                         NEVER
+ * Vector37 keeps no store on the FM-1 (its settings are not written on the SMK either): the app writes the update
+ * staging only. The update loader (firmware/loader, its own FL_RANGE_OK) is the upstream FM-1 one. */
 #define FL_PLAIN_LO     0x00093000u                /* plain XIP window from the FM-1 VM start */
-#define FL_DATA_LO      0x00097000u                /* Felucca main store */
-#define FL_DATA_HI      0x000E0000u
-#define FL_GLOB_LO      0x000FC000u                /* Felucca superblock / globals */
-#define FL_GLOB_HI      0x000FF000u
+#define FL_HEAD_HI      0x00004000u                /* protected: [0, FL_HEAD_HI) */
+#define FL_BAK_LO       0x000E8000u                /* protected: the stock OTA's VM backup, BTIF, USR */
+#define FL_BAK_HI       0x000FC000u
+#define FL_KEYMAC_LO    0x000FF000u                /* protected: key_mac and above */
 #define FL_OTA_LO       0x000E0000u                /* M-UPGRADE loader staging, ota.c */
 #define FL_OTA_HI       0x000E5000u
-#define FL_FM6_LO       0x000E5000u                /* the FM6 patch bank (fm6_bank.c), A / B sectors; SLOOP 2.4 */
-#define FL_FM6_HI       0x000E7000u
-#define FL_USR4_LO      0x000E7000u                /* the user sample slot USR4 (eng_sample.c), 80 KiB; SLOOP 2.4 */
-#define FL_USR4_HI      0x000FB000u                /* (0xFB000..0xFBFFF stays free) */
-/* Felucca's own store (projects, user samples; settings; the FM6 bank) */
-#define FL_STORE_OK(off, n) (FL_IN(off, n, FL_DATA_LO, FL_DATA_HI) || FL_IN(off, n, FL_GLOB_LO, FL_GLOB_HI) || \
-                             FL_IN(off, n, FL_FM6_LO, FL_FM6_HI) || FL_IN(off, n, FL_USR4_LO, FL_USR4_HI))
-/* Where the RAM driver may erase / program. The app build allows only its own
- * data regions; the update loader (firmware/loader) defines its own window. */
+_Static_assert(FL_OTA_LO >= FL_HEAD_HI && FL_OTA_HI <= FL_BAK_LO && FL_OTA_LO % 0x1000u == 0u &&
+               FL_OTA_HI % 0x1000u == 0u, "FM-1: FL_OTA overlaps a protected range");
+#define FL_STORE_OK(off, n) 0                      /* (no store of ours on the FM-1) */
 #ifndef FL_RANGE_OK
-#define FL_RANGE_OK(off, n) (FL_STORE_OK(off, n) || FL_IN(off, n, FL_OTA_LO, FL_OTA_HI))
+#define FL_RANGE_OK(off, n) FL_IN(off, n, FL_OTA_LO, FL_OTA_HI)
 #endif
 #define FL_GUARD(off, n) FL_RANGE_OK(off, n)
 #endif /* BOARD_SMK37 */

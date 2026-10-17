@@ -18,8 +18,8 @@ static inline int32_t sat(int32_t x)
 static struct { int32_t dc[2], dce[2], env; } mst = {{0, 0}, {0, 0}, LIM_T};
 static inline int32_t dc_block(int32_t x, int32_t *dc, int32_t *err)
 {
-    int32_t e = (x << 6) - *dc + *err, d = e >> 12;
-    *err = e - (d << 12);
+    int32_t e = x * 64 - *dc + *err, d = e >> 12;     /* (x 64, x 4096: shifts of a negative value are UB) */
+    *err = e - d * 4096;
     *dc += d;
     return x - ((*dc + 32) >> 6);
 }

@@ -7,8 +7,8 @@
  * SMK-37 Pro: SPI1 group A (IOMAP_CON1 bit4 = 0): PB6 CLK, PB7 DO; PC8 CS, PB5 D/C;
  *             no backlight control (always on). Group B (PC10) carries the 16 RGB pad
  *             LEDs (WS2812 class) instead: fm1_padled_send() switches SPI1 over for one
- *             frame while the LCD CS is high, as the stock firmware does (stock v016
- *             0x0201b2f2 / 0x0201b32c; AC79 SDK spi.h for the pin groups).
+ *             frame while the LCD CS is high, as the stock firmware does (stock v016;
+ *             AC79 SDK spi.h for the pin groups).
  *
  *   fm1_lcd_hw_init()          pins, backlight on, SPI1 master at BAUD 4
  *   fm1_lcd_baud(b)            SPI1 clock = lsb / (b + 1)
@@ -16,6 +16,8 @@
  *   fm1_lcd_send_data(p, n)    D/C high, CS low, DMA n bytes from RAM p
  *   fm1_lcd_wait()             SPI done (or timeout, counted), pending cleared
  *   fm1_lcd_deselect()         CS high
+ *   fm1_lcd_backlight(on)      FM-1: PA2 low (on) / high (off); the TIMER5 scan writes port A too: IRQs off around it.
+ *                              SMK-37 Pro: nothing (always on; PA2 is a key-matrix row there)
  * SMK-37 Pro only:
  *   fm1_padled_send(p, n)      LCD deselected and idle: SPI1 to PC10 at BAUD 8, DMA n bytes
  *                              (then fm1_lcd_wait, then fm1_padled_done)
@@ -59,7 +61,9 @@
 #endif
 
 static uint32_t fm1_lcd_timeouts;
-static uint8_t fm1_lcd_cur_baud = 4u;
+#if BOARD_SMK37
+static uint8_t fm1_lcd_cur_baud = 4u;             /* (fm1_padled_done restores it) */
+#endif
 
 FM1_INLINE void fm1_lcd_hw_init(void)
 {
@@ -81,14 +85,30 @@ FM1_INLINE void fm1_lcd_hw_init(void)
 #endif
     FM1_LCD_SPI_CON = 0x4021u;
     FM1_LCD_SPI_BAUD = 4u;
+#if BOARD_SMK37
     fm1_lcd_cur_baud = 4u;
+#endif
 }
+
+#if BOARD_SMK37
+FM1_INLINE void fm1_lcd_backlight(uint32_t on) { (void)on; }   /* always on; never touch PA2 (a matrix row) */
 
 FM1_INLINE void fm1_lcd_baud(uint32_t b)
 {
     FM1_LCD_SPI_BAUD = b;
     fm1_lcd_cur_baud = (uint8_t)b;
 }
+#else
+FM1_INLINE void fm1_lcd_backlight(uint32_t on)
+{
+    if (on)
+        FM1_LCD_PA_OUT &= ~FM1_LCD_BL;
+    else
+        FM1_LCD_PA_OUT |= FM1_LCD_BL;
+}
+
+FM1_INLINE void fm1_lcd_baud(uint32_t b) { FM1_LCD_SPI_BAUD = b; }
+#endif
 
 static void fm1_lcd_wait(void)
 {

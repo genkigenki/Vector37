@@ -2,18 +2,29 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
  * Vector37: Copyright (C) 2026 M. Geisler (makkuro) */
 /* Vector37, an orbiting overtone synth for the M-Vave SMK-37 Pro: one compilation unit (the HAL is
- * header-only; board layer from SLOOP / Felucca). Order matters. */
+ * header-only; board layer from SLOOP / Felucca). Order matters.
+ * BOARD_SMK37 1: the SMK-37 (build.py, the default); 0: the FM-1 (BOARD=fm1, experimental: its panel is
+ * panel_fm1.c, no store, MASTER a pot, no TRS MIDI OUT). */
 #include <stdint.h>
-#define MK_VERSION "0.2"
+#define MK_VERSION "0.3"
 #define BRAND_NAME "VECTOR37"
 #define BRAND_CRASH "VECTOR37 CRASH"
 #define BRAND_RESCUE "VECTOR37 USB RESCUE"
+#if BOARD_SMK37
 #define SMK_PAD_EVENTS 1             /* the pads are gate buttons, not note keys (smk_input.h) */
+#endif
 #include "fm1_time.h"
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
+#if BOARD_SMK37
 #include "smk_input.h"
+#else
+#include "fm1_input.h"               /* the FM-1: 27 keys, 14 buttons, 7 encoders, the key and button LEDs */
+#include "fm1_adc.h"                 /* MASTER, a pot */
+#define PANEL_MASTER 1               /* (mix.c: the pot's level after the master) */
+static volatile int32_t panel_master_q12 = 4096;   /* the pot: 0 .. 4096 (panel_fm1.c) */
+#endif
 #include "fm1_timer.h"
 #include "fm1_audio.h"
 #include "fm1_lcd_hw.h"
@@ -45,8 +56,16 @@ bootguard_t bootguard __attribute__((section(".noinit")));
 #define FELUCCA_UAC_TONE 0
 #define FELUCCA_FLASH 1
 #define HALF_FRAMES 256              /* I2S half buffer: 5.8 ms at 44.1 kHz */
+#if BOARD_SMK37
 #include "smk_uart_tx.h"
 #include "smk_midi_out.h"            /* TRS MIDI OUT (UART1 TX, PC7): the keys and wheels as played (ui.c) */
+#else                                /* the FM-1's jack is MIDI IN: no TRS MIDI OUT (ui.c's calls do nothing) */
+static uint8_t trs_out;
+static struct { uint8_t dead; } smo;
+static void smo_put(uint32_t pkt) { (void)pkt; }
+static void smo_tick(void) {}
+static void smo_on(uint32_t on) { (void)on; }
+#endif
 #include "usb.c"
 #include "audio.c"
 
@@ -96,13 +115,24 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
         return -8;
     return fl_write(off, src, n);
 }
+static int flash_probe(void)             /* the JEDEC id matches (scenes.c: persist_boot) */
+{
+    uint32_t f = irq_save();
+    int ok = FL_JEDEC_OK(FL_FAR(fl_jedec_ram)());
+    irq_restore(f);
+    return ok;
+}
 #define FELUCCA_DATA_FAMILY "VECTOR"     /* owner tag SMK37DATAVECTOR */
 #define FELUCCA_DATA_UNTAGGED_OK 0
 #include "storage.c"
 #include "scenes.c"
 
 static uint8_t recovery_active;
+#if BOARD_SMK37
 #define OTA_IDENTITY (recovery_active ? SMK_MODEL "_000" : FELUCCA_ID)
+#else
+#define OTA_IDENTITY (recovery_active ? "FM-1_000" : FELUCCA_ID)
+#endif
 #include "ota.c"
 static void recovery_poll(void);
 static uint32_t ota_now_ms(void) { return fm1_ms; }

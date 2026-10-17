@@ -1,0 +1,42 @@
+
+Quick start guide
+The quick start guide will lead you from zero to sound and show some of the
+most important features of Vector. For a comprehensive description of the
+machine and its sound synthesis engine, see the Overview section.
+First, make sure the hardware is set up properly:
+Connect a MIDI controller to the USB or MIDI IN jack.
+Connect headphones to the Phones jack.
+Connect the provided power supply and turn on Vector.
+After Vector starts up, it shows the Orbiter screen [img: screen_orbiter] –
+it is called after the blue orb which moves along a certain trajectory.
+Make sure the Control switch is in the Auto position.
+Hit the Focus button twice. The blue orb moves to the first (top left)
+Corner.
+Play a note and experiment with the five knobs just below the display
+which control the Corner parameters (Overtone Gen 1 and 2,
+Overtone Blend, Filter Cutoff and Filter Resonance).
+Hit Focus again to move to the next Corner and create a different sound by
+playing a note. Each Corner has its own set of parameters.
+Hold the Focus button to exit the focus mode. Notice the blue orb is moving
+along the trajectory again. Now, when you play a note, all four Corners are
+playing simultaneously and their mix is determined by the position of the
+green orb. Explore the periodic modulation.
+The trajectory can be moved on the touchscreen or warped on the Warp Pad.
+Try the different shapes and speeds.
+Next, try the Arpeggiator. Make sure the Active switch in the
+Arpeggiator section is turned on and that the Feed Direction
+switch is set to Arp or Both and slowly blinking.
+If it is not, enable the Feed button.
+Play a chord to trigger the arpeggiator. You can transpose octaves of the
+individual steps in the top part of the Effects screen [img: screen_effects].
+You can also use the Octave Walk [img: random_keys] to enable octave
+randomization.
+Try the Delay. Set the Feed Direction switch to Delay or
+Both and the Delay knob in the Mixer section to approximately 50%.
+Play with the Delay Time and Delay Feedback on the
+Effects screen [img: screen_effects].
+Play with Chorus and Reverb in a similar fashion (except the Feed
+Direction has no effect here).
+Move to the Presets screen [img: screen_presets] and try another preset from
+the System presets collection to explore more sound possibilities!
+          

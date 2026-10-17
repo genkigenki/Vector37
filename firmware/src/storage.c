@@ -16,7 +16,7 @@
 #define ST_PAYLOAD_OFF 256u
 #define ST_PAYLOAD_MAX (ST_SECTOR - ST_PAYLOAD_OFF)
 
-/* Vector37 (SMK-37 Pro): FL_DATA 0x9D000.., A/B neighbours: settings 0x9D000 / 0x9E000, (sounds, later)
+/* Vector37 (SMK-37 Pro): FL_DATA 0x9D000.., A/B neighbours: settings 0x9D000 / 0x9E000, your sounds (scenes.c) 0x9F000 / 0xA0000;
  * 2n, 2n + 1 at 0x9F000 + n * 0x2000; the owner tag at 0xAF000 (as every SMK port). Never near BTIF / USRTRIM (0xC0000..)
  * or key_mac (0xFF000). */
 enum { OBJ_SETTINGS, OBJ_SCENE0, OBJ_COUNT = OBJ_SCENE0 + 8 };

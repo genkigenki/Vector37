@@ -103,14 +103,21 @@ static void mk_main(void)
     mk_dbg.prev_stage = mk_dbg.stage;
     mk_dbg.prev_rst = fm1_boot.p3_rst;
     fm1_input_init();
+#if BOARD_SMK37
     if (flash_ok)                               /* the factory key / pad velocity curves (read only) */
         smk_trim_load(fm1_xip_ptr(SMK_TRIM_FLASH));
+#else
+    fm1_adc_init();                             /* MASTER */
+    panel_master_init();                        /* (read before the audio starts: no jump) */
+#endif
     synth_init();                               /* the wavetables into RAM */
     ui_init();                                  /* the first sound */
     audio_init();
     usb_cdc_on = settings.console;              /* before USB starts: the host sees one device */
     usb_start();
+#if BOARD_SMK37
     smk_uart1_tx_init();                        /* TRS MIDI OUT (PORTC, IOMAP RMW: before TIMER5) */
+#endif
     fm1_timer5_start(isr_timer5, 4);            /* above ALNK0 (3): the scan may nest into the render */
     fm1_guard_lock_top();
     fm1_irq_enable_all();
@@ -156,11 +163,13 @@ static void mk_main(void)
         ui_input();
         mk_dbg.stage = 2;
         ui_leds();
+#if BOARD_SMK37
         padled_flush();                         /* the pads' colours, between LCD transfers */
+#endif
         mk_dbg.stage = 3;
         draw_frame();
         mk_dbg.stage = 4;
-        while (fm1_ms - m < 15u) {              /* ~60 loops / s at most */
+        while (fm1_ms - m < UI_LOOP_MS) {       /* ~60 loops / s at most (draw.c) */
             ui_input();
             midi_poll();
         }

@@ -399,8 +399,8 @@ int main(int argc, char **argv)
                 panel_ms(3000);
                 per = (fb_pixels - p0) / (fstat_n - n0 ? fstat_n - n0 : 1u), fps = 375000u / (per ? per : 1u);
                 printf("  info SPIN while playing: %u pixels a second, %u field frames, the SPI carries ~%u a second\n",
-                       (fb_pixels - p0) / 3u, fstat_n - n0, fps > 33u ? 33u : fps);
-                check("... SPIN while playing: 25 frames a second or more", fps >= 25u && fstat_n - n0 >= 75u);
+                       (fb_pixels - p0) / 3u, fstat_n - n0, fps > 62u ? 62u : fps);
+                check("... SPIN while playing: 50 frames a second or more (tests/fps.c times them)", fps >= 50u && fstat_n - n0 >= 150u);
                 panel_key(12, 0, 0), panel_key(19, 0, 0);
             }
             panel_enc(5, -20);
@@ -521,9 +521,46 @@ int main(int argc, char **argv)
                   poly == (uint32_t)pt.g[G_POLY] && arp == (uint32_t)pt.g[G_ARP]);
         }
     }
-    tap(B_CHORD);
-    check("CHORD tap: POLY -> DUAL", pt.g[G_POLY] == PM_DUAL && hint_has("DUAL"));
-    tap(B_CHORD), tap(B_CHORD);
+    {   /* the sets stay open: a tap opens, again closes, another's switches; held while turning: only while held */
+        int16_t rv = pt.g[G_RVMIX];
+        tap(B_FX);
+        panel_ms(200);
+        shot("latch_fx");
+        check("FX tapped: the MIXER set stays open, its light, the central box", ui.layer == L_FX && ui.latch == L_FX &&
+              (btn_leds >> B_FX & 1u) && sc.cbox == CB_LAYER);
+        panel_enc(0, 3);
+        panel_ms(1600);
+        check("... K1: REVERB, still open after the touch", pt.g[G_RVMIX] == rv + 3 && ui.layer == L_FX && sc.cbox == CB_LAYER);
+        panel_button(B_CHORD, 1);
+        panel_ms(300);
+        panel_enc(4, 1);
+        panel_ms(100);
+        check("... CHORD held, a knob turned: VOICE while held", ui.layer == L_VOICE);
+        panel_button(B_CHORD, 0);
+        panel_ms(100);
+        check("... let go: the MIXER again (still open)", ui.layer == L_FX && ui.latch == L_FX);
+        tap(B_FADERBANK);
+        check("... FADER BANK tapped: the MORE set instead, its light, FX's off", ui.layer == L_CORNER &&
+              (btn_leds >> B_FADERBANK & 1u) && !(btn_leds >> B_FX & 1u));
+        tap(B_FADERBANK);
+        check("... tapped again: closed, the planets' knobs", ui.layer == L_MAIN && ui.latch == 0u &&
+              !(btn_leds >> B_FADERBANK & 1u));
+        pt.g[G_RVMIX] = rv;
+    }
+    {   /* CHORD: VOICE, K7 VOICES: POLY, DUAL, MONO 1 .. 8 (the stack) */
+        int16_t poly = pt.g[G_POLY], stack = pt.g[G_STACK];
+        pt.g[G_POLY] = PM_POLY;
+        tap(B_CHORD);
+        panel_enc(6, 1);
+        panel_ms(100);
+        check("CHORD tapped: VOICE open; K7 VOICES: POLY -> DUAL", ui.layer == L_VOICE && pt.g[G_POLY] == PM_DUAL);
+        panel_enc(6, 1), panel_ms(50), panel_enc(6, 1), panel_ms(150);
+        shot("latch_voice");
+        check("... MONO 2: the mode and the stack in one", pt.g[G_POLY] == PM_MONO && pt.g[G_STACK] == 2);
+        tap(B_CHORD);
+        check("... CHORD again: closed", ui.latch == 0u && ui.layer == L_MAIN);
+        pt.g[G_POLY] = poly, pt.g[G_STACK] = stack;
+    }
     tap(B_GLOBE);
     panel_ms(300);
     tap(B_GLOBE);
@@ -555,16 +592,38 @@ int main(int argc, char **argv)
     check("REC: latch on", latch == 1u);
     tap(B_REC);
     tap(B_ARP);
-    check("ARP tap: the arpeggiator on", pt.g[G_ARP] != 0 && hint_has("ARP"));
+    panel_enc(0, 1);
+    panel_ms(100);
+    check("ARP tapped: the ARP set open, its light; K1: the arpeggiator UP", ui.layer == L_ARP && pt.g[G_ARP] == ARP_UP &&
+          (btn_leds >> B_ARP & 1u));
     tap(B_ARP);
+    {
+        uint32_t on = 0, off = 0, t;
+        for (t = 0; t < 20u; t++) {
+            panel_ms(60);
+            on += btn_leds >> B_ARP & 1u, off += !(btn_leds >> B_ARP & 1u);
+        }
+        check("... closed: the arpeggiator runs on, its light blinks", ui.layer != L_ARP && pt.g[G_ARP] == ARP_UP && on && off);
+    }
+    tap(B_ARP), panel_enc(0, -1), panel_ms(60), tap(B_ARP);
     tap(B_PLAY), panel_ms(420), tap(B_PLAY);
     check("PLAY: two taps 0.5 s apart: about 120 BPM", pt.g[G_TEMPO] > 100 && pt.g[G_TEMPO] < 140);
     tap(B_OCTUP);
     check("OCT+: an octave up", ui.oct == 1 && hint_has("OCTAVE"));
     tap(B_OCTDN);
     panel_key(12, 0, 0), panel_key(16, 0, 0), panel_key(19, 0, 0);
-    tap(B_PATCH);
-    check("PATCH: all notes off", hint_has("ALL NOTES OFF"));
+    tap(B_PATCH), tap(B_PATCH);
+    check("PATCH twice: all notes off, the list closed again", hint_has("ALL NOTES OFF") && !ui.list);
+    for (k = 0; k < 6u; k++)
+        tap(B_GLOBE);
+    check("GLOBE six taps: FOCUS 1 2 3 4 CENTRE, then OFF", focus == 0u && hint_has("FOCUS OFF"));
+    tap(B_GLOBE);
+    check("... once more: FOCUS 1", focus == 1u && hint_has("FOCUS 1"));
+    tap(B_GLOBE), tap(B_GLOBE), tap(B_GLOBE), tap(B_GLOBE);
+    check("... CENTRE", focus == 5u && hint_has("FOCUS CENTRE"));
+    tap(B_GLOBE);
+    check("... OFF", focus == 0u && hint_has("FOCUS OFF"));
+    panel_ms(400);
     tap(B_KNOBBANK);                                  /* the guide: K1 scrolls it */
     shot("guide_0");
     check("KNOB BANK: the guide opens, the top line says K1 scrolls", ui.help == 1u && ui.mscroll == 0);
@@ -678,7 +737,7 @@ int main(int argc, char **argv)
     }
     {   /* the moon's trail: its real places every frame, joined; a turn long, at least 0.5 s */
         int16_t s0 = pt.g[G_SUBSPD], z0 = pt.g[G_SUBSZ], r0 = pt.g[G_RATE];
-        uint32_t k2, k, span[2], lit[2];
+        uint32_t k2, k, m, span[2], lit[2];
         pt.g[G_RATE] = 1;                              /* (the sun calm: 16 beats a round) */
         int32_t maxseg[2];
         pt.g[G_SUBSZ] = 90;
@@ -696,17 +755,22 @@ int main(int argc, char **argv)
                     continue;                          /* (a jump of the path itself: not drawn; before the sun was calm) */
                 maxseg[k2] = dx > maxseg[k2] ? dx : dy > maxseg[k2] ? dy : maxseg[k2];
             }
-            for (k = 2; k < 8u && k < mt_n; k++) {     /* (just behind the moon: drawn, green) */
-                int32_t x = mt[mt_idx(k)].x >> 4, y = mt[mt_idx(k)].y >> 4, dx, dy;
-                uint32_t best = 0;
-                for (dy = -1; dy <= 1; dy++)
-                    for (dx = -1; dx <= 1; dx++) {
-                        uint32_t gg = (fb[(y + dy) * 240 + x + dx] >> 5) & 63;
-                        best = gg > best ? gg : best;
-                    }
-                g += best;
+            lit[k2] = 0;
+            for (m = 0; m < 4u; m++) {                 /* (four moments: the moon may pass under a planet or the sun) */
+                for (g = 0, k = 2; k < 8u && k < mt_n; k++) {   /* (just behind the moon: drawn, green) */
+                    int32_t x = mt[mt_idx(k)].x >> 4, y = mt[mt_idx(k)].y >> 4, dx, dy;
+                    uint32_t best = 0;
+                    for (dy = -1; dy <= 1; dy++)
+                        for (dx = -1; dx <= 1; dx++) {
+                            uint32_t gg = (fb[(y + dy) * 240 + x + dx] >> 5) & 63;
+                            best = gg > best ? gg : best;
+                        }
+                    g += best;
+                }
+                lit[k2] = g > lit[k2] ? g : lit[k2];
+                if (m < 3u)
+                    panel_ms(137);
             }
-            lit[k2] = g;
         }
         printf("  info the moon's trail: slow %u ms back, longest piece %d/16 px, green %u; fast %u ms back, green %u\n",
                span[0], maxseg[0], lit[0], span[1], lit[1]);
@@ -728,13 +792,16 @@ int main(int argc, char **argv)
     }
     {   /* the screen's cost: pixels sent per second while playing (12 MHz SPI: ~375000 a second) */
         uint32_t p0 = fb_pixels;
-        fstat_n = fstat_full = fstat_area = 0;
+        fstat_n = fstat_full = fstat_area = fstat_sent = 0;
         panel_key(12, 1, 100), panel_key(16, 1, 100), panel_key(19, 1, 100), panel_key(23, 1, 100);
         panel_ms(3000);
         printf("  info pixels sent while playing: %u a second (the SPI carries ~375000); field frames %u (%u whole), "
-               "%u pixels each\n", (fb_pixels - p0) / 3u, fstat_n, fstat_full, fstat_area / (fstat_n ? fstat_n : 1u));
-        check("partial redraws: ~33 field frames a second, the SPI able to carry 30 or more (not over 90 % of it)",
-              fstat_n >= 85u && (fb_pixels - p0) / 3u < 337500u && 375000u / ((fb_pixels - p0) / (fstat_n ? fstat_n : 1u)) >= 30u);
+               "%u pixels drawn each, %u sent\n", (fb_pixels - p0) / 3u, fstat_n, fstat_full, fstat_area / (fstat_n ? fstat_n : 1u),
+               fstat_sent / (fstat_n ? fstat_n : 1u));
+        check("partial redraws: ~60 field frames a second, the SPI able to carry 60 or more (not over 90 % of it); "
+              "of the tiles drawn only the changed ones sent",
+              fstat_n >= 170u && (fb_pixels - p0) / 3u < 337500u && 375000u / ((fb_pixels - p0) / (fstat_n ? fstat_n : 1u)) >= 60u &&
+              fstat_sent < fstat_area);
     }
     {   /* a knob morphing the path the whole time (the path drawn anew every frame, where it moved) */
         uint32_t p0, k;
@@ -749,10 +816,10 @@ int main(int argc, char **argv)
         panel_button(B_SEQ, 0);
         printf("  info while MORPH turns: %u pixels a second; field frames %u (%u whole), %u pixels each\n", (fb_pixels - p0) / 3u,
                fstat_n, fstat_full, fstat_area / (fstat_n ? fstat_n : 1u));
-        {   /* (the device: frames as fast as the SPI carries them, at most ~33 a second) */
+        {   /* (the device: frames as fast as the SPI carries them, at most ~62 a second) */
             uint32_t per = (fb_pixels - p0) / (fstat_n ? fstat_n : 1u), fps = 375000u / (per ? per : 1u);
-            printf("  info while MORPH turns: about %u frames a second on the SPI\n", fps > 33u ? 33u : fps);
-            check("a fader morphing the whole path: 16 frames a second or more", fps >= 16u);
+            printf("  info while MORPH turns: about %u frames a second on the SPI\n", fps > 62u ? 62u : fps);
+            check("a fader morphing the whole path: 25 frames a second or more on the SPI", fps >= 25u);
         }
     }
     {   /* TRS MIDI OUT: the keys as played (the note off: the note sent, whatever the octave since), the wheels; ARP held,
@@ -810,6 +877,261 @@ int main(int argc, char **argv)
         panel_ms(100);
         panel_key(12, 1, 99), panel_ms(60), panel_key(12, 0, 0), panel_ms(60);
         check("... ON again: sent", trs_out && panel_trs_n == 6u);
+    }
+    {   /* no planet selected, K7: WIDTH, the orbit in stereo (the central box, its name and what it does) */
+        int32_t w0;
+        panel_ms(2000);
+        if (ui.sel)
+            ui.sel = 0;
+        panel_ms(300);
+        w0 = pt.g[G_WIDTH];
+        panel_enc(6, 10);
+        panel_ms(150);
+        shot("orbit_width");
+        check("no planet selected, K7: WIDTH, the orbit in stereo; the central box says what it does",
+              ui.layer == L_ORBIT && pt.g[G_WIDTH] == w0 + 10 && sc.cbox == CB_LAYER && sc.gk == 7u && (sc.shown & SH_HINT));
+    }
+    {   /* the wavetables: a planet's overview shows its frame now and where it reads; SCALE held: the WAVE set, its
+         * bubble (each generator's frame, WT POS, WT ORBIT, the place now) */
+        int32_t v0;
+        uint32_t px, ok;
+        preset_load(8);                                /* WAVE ORBIT */
+        panel_ms(300);
+        panel_key(12, 1, 100), panel_key(19, 1, 100);
+        panel_ms(1500);
+        panel_enc(0, 1), panel_ms(30), panel_enc(0, -1);   /* (no planet: K1 the orbit's WARP; back) */
+        panel_ms(1600);
+        pad(padof(PG_SELECT, 1));
+        panel_ms(200);
+        panel_enc(0, 0);
+        v0 = pt.c[1][CP_G1];
+        panel_enc(1, 0);
+        shot("wt_overview");
+        check("a wavetable planet selected: its overview, GEN 1 a bank (W3 VOWEL)", sc.ov == PG_SELECT + 1u &&
+              v0 == PAT_W1 + 2 && (sc.shown & SH_OVERVIEW));
+        panel_button(B_SCALE, 1);
+        panel_ms(300);
+        v0 = pt.c[1][CP_WP1];
+        panel_enc(0, 9);
+        panel_ms(200);
+        shot("hold_scale_wave");
+        for (ok = 0, px = 0; px < 240u * 240u; px++)   /* (the bubble's frame in the planet's colour) */
+            ok += fb[px] == rgbk(CCOL[1], 256);
+        check("SCALE held: the WAVE set, K1 = WT POS 1 of the planet, its bubble (not the central box), lit",
+              ui.layer == L_WAVE && pt.c[1][CP_WP1] == v0 + 9 && sc.ov == OV_WAVE && sc.cbox == CB_NONE && sc.gk == 1u &&
+              (btn_leds >> B_SCALE & 1u) && ok > 200u);
+        v0 = pt.c[1][CP_WO1];
+        panel_enc(1, -20);
+        panel_ms(200);
+        check("... K2 = WT ORBIT 1", pt.c[1][CP_WO1] == v0 - 20 && sc.gk == 2u);
+        panel_button(B_SCALE, 0);
+        panel_ms(100);
+        check("... let go: back to the planet's knobs (held and turned: not left open)", ui.layer == L_MAIN && ui.latch == 0u);
+        tap(B_SCALE);
+        check("SCALE tapped: the WAVE set stays open, its light", ui.layer == L_WAVE && ui.latch == L_WAVE && sc.ov == OV_WAVE &&
+              (btn_leds >> B_SCALE & 1u));
+        tap(B_SCALE);
+        check("... again: closed", ui.layer == L_MAIN && !(btn_leds >> B_SCALE & 1u));
+        pad(padof(PG_SELECT, 1));
+        panel_ms(100);
+        panel_button(B_SCALE, 1), panel_ms(300);
+        v0 = pt.c[0][CP_WP1];
+        panel_enc(0, 3);
+        panel_ms(100);
+        check("... no planet selected: the WAVE knobs say so, change nothing", pt.c[0][CP_WP1] == v0 && hint_has("SELECT A PLANET"));
+        panel_button(B_SCALE, 0), panel_ms(100);
+        panel_key(12, 0, 0), panel_key(19, 0, 0);
+        panel_ms(500);
+    }
+    {   /* SETUP (BT): the MIDI channels, the pad light, the sound at power-on; kept in the store 3 s after the change */
+        uint32_t i, ch5 = 0, e0, on;
+        tap(B_BT);
+        panel_ms(100);
+        check("BT tapped: the SETUP set open, its light", ui.layer == L_SETUP && ui.latch == L_SETUP && (btn_leds >> B_BT & 1u));
+        shot("setup");
+        panel_enc(0, 4);                           /* TRS MIDI OUT: CH1 -> CH5 */
+        panel_ms(150);
+        check("SETUP K1: TRS MIDI OUT CH5 (shown)", trs_out && settings.trs_ch == 4u && sc.gk == 1u);
+        shot("setup_trs_ch5");
+        panel_trs_n = 0;
+        panel_key(12, 1, 99), panel_ms(60), panel_key(12, 0, 0), panel_ms(60);
+        for (i = 0; i + 2u < panel_trs_n; i += 3u)
+            ch5 += panel_trs[i] == 0x94u || panel_trs[i] == 0x84u;
+        check("... the keys go out on channel 5", panel_trs_n == 6u && ch5 == 2u);
+        panel_enc(1, 3);                           /* MIDI IN: OMNI -> CH3 */
+        panel_ms(150);
+        check("SETUP K2: MIDI IN CH3", settings.midi_in == 3u);
+        panel_midi(0x90, 60, 100);                 /* channel 1: passes by */
+        panel_ms(60);
+        for (on = 0, i = 0; i < NVOICE; i++)
+            on += vs[i].on;
+        check("... a note on channel 1: not played", on == 0u);
+        panel_midi(0x92, 60, 100);                 /* channel 3 */
+        panel_ms(60);
+        for (on = 0, i = 0; i < NVOICE; i++)
+            on += vs[i].on;
+        check("... on channel 3: played", on >= 1u);
+        panel_midi(0x82, 60, 0);
+        panel_ms(60);
+        panel_enc(3, 2);                           /* START SOUND: 1 -> 3 */
+        panel_ms(150);
+        check("SETUP K4: START SOUND 3", settings.preset == 2u);
+        e0 = panel_erases;
+        panel_ms(1000);
+        check("... not written while you turn", panel_erases == e0);
+        panel_ms(3000);
+        check("... written 3 s after the last change (one erase)", panel_erases == e0 + 1u);
+        tap(B_BT);
+        panel_ms(100);
+        check("BT again: closed", ui.layer != L_SETUP && !(btn_leds >> B_BT & 1u));
+    }
+    {   /* your sounds: the sound list (PATCH): FACTORY and USER; a pad held 1 s SAVEs into that USER slot */
+        int16_t cut, fact;
+        uint32_t e0, n = ui.preset, u = 3u;
+        patch_t f;
+        preset_make(n, &f);
+        fact = f.c[0][CP_CUT];
+        pad(padof(PG_SELECT, 0));
+        panel_ms(100);
+        panel_enc(5, -9);                          /* CUTOFF of planet 1 */
+        panel_ms(200);
+        cut = pt.c[0][CP_CUT];
+        tap(B_PATCH);
+        panel_ms(100);
+        check("PATCH: the sound list, FACTORY, its light on", ui.list && ui.lbank == 0u && (btn_leds >> B_PATCH & 1u));
+        shot("list_factory");
+        e0 = panel_erases;
+        panel_pad(u, 100);
+        panel_ms(1200);
+        check("a pad held 1 s: SAVED in USER 4, one record written, the USER bank in view",
+              hint_has("SAVED U4") && usr_has(u) && panel_erases == e0 + 1u && ui.bank == 1u && ui.preset == u &&
+              ui.lbank == 1u && cut != fact);
+        shot("list_saved");
+        panel_pad(u, 0);
+        panel_ms(100);
+        check("... let go: no load on top (the sound as it was)", ui.bank == 1u && pt.c[0][CP_CUT] == cut);
+        pad(5);
+        check("an empty USER slot: nothing loaded, the hint says how to fill it", hint_has("EMPTY") && ui.preset == u);
+        tap(B_LEFT);
+        check("< in the list: the FACTORY bank", ui.lbank == 0u && ui.list);
+        pad(n);
+        check("... a pad: that factory sound, untouched", ui.bank == 0u && ui.preset == n && pt.c[0][CP_CUT] == fact);
+        panel_enc(0, 1), panel_ms(60);
+        check("K1: the other bank", ui.lbank == 1u);
+        pad(u);
+        check("... USER 4: your sound", ui.bank == 1u && ui.preset == u && pt.c[0][CP_CUT] == cut && hint_has("U4"));
+        tap(B_LEFT);
+        pad(15);
+        check("pad 16: FACTORY 16, METAL PERC", ui.bank == 0u && ui.preset == 15u && hint_has("METAL PERC"));
+        tap(B_RIGHT);
+        pad(u);
+        check("... and back to USER 4", ui.bank == 1u && ui.preset == u);
+        panel_ms(400);
+        tap(B_PATCH);
+        check("PATCH again: closed", !ui.list);
+        tap(B_RIGHT);
+        check("< > outside: the USER bank's saved sounds (one: stays)", ui.bank == 1u && ui.preset == u);
+        tap(B_PATCH);
+        panel_ms(10500);
+        check("the list closes itself 10 s after its last touch", !ui.list);
+        memset(&usr, 0, sizeof usr);               /* (a power cycle: from the store again) */
+        settings.preset = 0, settings.midi_in = 0, settings.trs_ch = 0;
+        persist_boot();
+        check("power cycle: the settings back (CH5 out, CH3 in, start sound 3)",
+              settings.trs_ch == 4u && settings.midi_in == 3u && settings.preset == 2u && trs_out);
+        check("... your sound in USER 4, named after its factory sound", usr_has(u) && usr.src[u] == n &&
+              !user_load(u) && pt.c[0][CP_CUT] == cut);
+        sound_start(NPRESET + u);
+        check("START SOUND U4: your sound at power-on", ui.bank == 1u && ui.preset == u);
+        sound_start(NPRESET + 7u);
+        check("... an empty USER slot: factory sound 8", ui.bank == 0u && ui.preset == 7u);
+        {   /* the first 0.3 build's record (ten places, no names; a sound saved in its factory sound's place): USER,
+             * named so */
+            uint32_t old = (uint32_t)sizeof usr.h + 10u * (uint32_t)sizeof(patch_t);   /* (ten places, no names) */
+            usr.h.magic = USR_MAGIC, usr.h.nslot = 10, usr.h.nc = NC, usr.h.ncp = CP_N, usr.h.ng = G_COUNT;
+            usr.h.mask = 1u << 6, usr.src[6] = 1;
+            st_save(OBJ_SCENE0, &usr, old);
+            memset(&usr, 0, sizeof usr);
+            persist_boot();
+            check("an older record: its sound in USER 7, named after factory sound 7", usr_has(6) && usr.src[6] == 6u &&
+                  !usr_has(u));
+        }
+        {   /* the store stays in its place: FL_DATA 0x9D000..0xAFFFF (objects, the owner tag), nothing else written */
+            uint32_t a, out = 0;
+            for (a = 0; a < sizeof panel_nor; a++)
+                out += panel_nor[a] != 0xFFu && (a < 0x9D000u || a >= 0xB0000u);
+            check("the store: only 0x9D000 .. 0xAFFFF written", out == 0u);
+        }
+        settings.trs_ch = 0, settings.midi_in = 0, settings.preset = 0;
+    }
+    {   /* FACTORY 2 (sounds 17..32): the third bank of the list (FACTORY, USER, FACTORY 2 in turn), its sounds on the
+         * pads, < > within it, a sound of it saved into USER and named after it, START SOUND 17..32; old settings and
+         * records as they were */
+        uint32_t k, u = 8u;
+        tap(B_PATCH);
+        panel_ms(100);
+        panel_enc(0, 1), panel_ms(60);
+        check("FACTORY 2: K1 from FACTORY: USER", ui.list && ui.lbank == BK_USER);
+        panel_enc(0, 1), panel_ms(60);
+        check("... again: FACTORY 2, its title and its own light", ui.lbank == BK_F2 && pad_rgb[0] != 0u);
+        shot("list_factory2");
+        panel_enc(0, 1), panel_ms(60);
+        check("... again: FACTORY (round)", ui.lbank == BK_F1);
+        tap(B_LEFT);
+        check("... < : FACTORY 2", ui.lbank == BK_F2);
+        pad(0);
+        check("... pad 1: 17 WARM STRINGS", ui.bank == BK_F2 && ui.preset == 0u && hint_has("17 WARM STRINGS"));
+        pad(15);
+        check("... pad 16: 32 DRUM KIT, an arpeggio at its tempo", ui.bank == BK_F2 && ui.preset == 15u &&
+              hint_has("32 DRUM KIT") && pt.g[G_ARP] == ARP_RND);
+        panel_pad(u, 100);
+        panel_ms(1200);
+        check("... a pad held: DRUM KIT SAVED in USER 9, named so", hint_has("SAVED U9 DRUM KIT") && usr_has(u) &&
+              usr.src[u] == 31u && ui.bank == BK_USER);
+        panel_pad(u, 0);
+        panel_ms(100);
+        tap(B_PATCH);
+        panel_ms(400);
+        check("PATCH: closed", !ui.list);
+        preset_load(NPRESET);
+        tap(B_LEFT);
+        check("< in FACTORY 2: from 17 back to 32 (within its bank)", ui.bank == BK_F2 && ui.preset == 15u &&
+              hint_has("32 DRUM KIT"));
+        tap(B_RIGHT);
+        check("> : 17 again", ui.bank == BK_F2 && ui.preset == 0u);
+        for (k = 0; k < NPRESET; k++) {               /* < >: every sound of FACTORY 2, playing */
+            char n[40];
+            syn.peak = 0;
+            panel_key(12, 1, 100), panel_key(19, 1, 90), panel_key(24, 1, 90);
+            panel_ms(1500);
+            snprintf(n, sizeof n, "preset_%u", (unsigned)(NPRESET + ui.preset + 1u));
+            shot(n);
+            check(n, ui.bank == BK_F2 && ui.preset == k && syn.peak > 1000);
+            panel_key(12, 0, 0), panel_key(19, 0, 0), panel_key(24, 0, 0);
+            panel_ms(300);
+            tap(B_RIGHT);
+        }
+        check("> through FACTORY 2: back to 17", ui.bank == BK_F2 && ui.preset == 0u);
+        settings.preset = 2u * NPRESET + 5u;      /* START SOUND 22 HARP: kept, back after a power cycle */
+        settings_save();
+        settings.preset = 0;
+        memset(&usr, 0, sizeof usr);
+        persist_boot();
+        check("START SOUND 22: kept through a power cycle", settings.preset == 2u * NPRESET + 5u);
+        sound_start(settings.preset);
+        check("... at power-on: 22 HARP", ui.bank == BK_F2 && ui.preset == 5u && sound_fact() == 21u);
+        check("... USER 9 still named after 32 DRUM KIT", usr_has(u) && usr.src[u] == 31u);
+        {
+            char b[28];
+            slot_label(b, sizeof b, BK_USER, u);
+            check("... its label: U9 DRUM KIT", !strcmp(b, "U9 DRUM KIT"));
+        }
+        sound_start(NPRESET + u);
+        check("START SOUND U9 (an older record's 16..31: USER): that sound", ui.bank == BK_USER && ui.preset == u);
+        sound_start(5u);
+        check("START SOUND 6 (0..15: FACTORY, as before)", ui.bank == BK_F1 && ui.preset == 5u);
+        settings.preset = 0;
+        settings_save();
     }
     printf(fails ? "screen: %d FAILED\n" : "screen: all ok\n", fails);
     return fails != 0;

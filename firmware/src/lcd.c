@@ -28,6 +28,17 @@ static void lcd_sync(void)          /* finish the running transfer (before touch
     lcd_busy = 0;
 }
 
+static const uint8_t *lcd_busy_p;  /* (the running transfer's source and length) */
+static uint32_t lcd_busy_n;
+
+/* wait only if the running transfer reads p .. p + n (a canvas half drawn while the other goes out) */
+static void lcd_sync_buf(const void *p, uint32_t n)
+{
+    const uint8_t *a = (const uint8_t *)p;
+    if (lcd_busy && a < lcd_busy_p + lcd_busy_n && lcd_busy_p < a + n)
+        lcd_sync();
+}
+
 static void lcd_cmd(uint8_t c)
 {
     lcd_sync();
@@ -43,6 +54,7 @@ static void lcd_data(const void *p, uint32_t n)
     lcd_sync();
     fm1_lcd_send_data(p, n);
     lcd_busy = 1;                  /* completed by lcd_sync */
+    lcd_busy_p = (const uint8_t *)p, lcd_busy_n = n;
 }
 
 static void lcd_window(uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)

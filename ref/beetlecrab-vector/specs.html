@@ -1,0 +1,350 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Specifications &mdash; Vector Operator&#39;s Manual</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/vector.css?v=60349a46" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=4348de45"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Index" href="genindex.html" />
+    <link rel="prev" title="Configuration" href="configuration.html" />
+    <!-- Matomo -->
+    <script>
+      var _paq = window._paq = window._paq || [];
+      /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+      _paq.push(['trackPageView']);
+      _paq.push(['enableLinkTracking']);
+      (function() {
+        var u="https://stats.beetlecrab.audio/";
+        _paq.push(['setTrackerUrl', u+'matomo.php']);
+        _paq.push(['setSiteId', '2']);
+        var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+        g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+      })();
+    </script>
+    <!-- End Matomo Code -->
+
+     
+
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html">
+            
+              <img src="_static/logo_white.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick start guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sound_engine.html">Sound engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Specifications</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#what-s-in-the-box">What’s in the box</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#connectivity">Connectivity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#firmware-updates">Firmware updates</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#midi-implementation">MIDI implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#health-and-safety">Health and safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#free-and-open-source-software">Free and open-source software</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="genindex.html">Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Vector</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Specifications</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="specifications">
+<h1>Specifications<a class="headerlink" href="#specifications" title="Link to this heading"></a></h1>
+<ul class="simple">
+<li><p>7” capacitive touchscreen display</p></li>
+<li><p>ARM® Cortex™-A53 with NEON™ DSP instructions</p></li>
+<li><p>32-bit internal processing</p></li>
+<li><p>32-bit DAC, 48 kHz, 106 dB SNR</p></li>
+<li><p>Headphone amplifier</p></li>
+<li><p>Runs Linux with a real-time kernel</p></li>
+<li><p>MIDI TRS input and output ports</p></li>
+<li><p>USB MIDI host and device ports (both capable of input and output)</p></li>
+<li><p>MIDI Polyphonic Expression (MPE) support</p></li>
+<li><p>Up to 16-voice polyphony</p></li>
+<li><p>Ethernet (LAN) connection</p></li>
+<li><p>Firmware easily upgradable over the network or with a USB flash drive</p></li>
+</ul>
+<section id="what-s-in-the-box">
+<h2>What’s in the box<a class="headerlink" href="#what-s-in-the-box" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>The Vector synthesizer unit (with a serial number on the bottom plate)</p></li>
+<li><p>Power supply with a region-matching plug</p></li>
+<li><p>Printed manual</p></li>
+</ul>
+</section>
+<section id="connectivity">
+<h2>Connectivity<a class="headerlink" href="#connectivity" title="Link to this heading"></a></h2>
+<figure class="align-center align-default">
+<img alt="_images/vector_back.png" src="_images/vector_back.png" style="width: 100%;" />
+</figure>
+<p>The rear side of Vector offers various connections. From left to right:</p>
+<ul class="simple">
+<li><p><strong>Phones</strong> is a 6.35 mm TRS jack with a stereo output. Connect it to a pair of
+headphones for monitoring.</p></li>
+<li><p><strong>Left</strong> and <strong>Right</strong> are two 6.35 mm TS jacks with line outputs (left and
+right channels). Connect them to a mixer or an audio interface.</p></li>
+<li><p><strong>MIDI IN</strong> and <strong>MIDI OUT</strong> are 3.5 mm TRS jacks with MIDI input and output
+channels. The pin-out is “Type A” as per the official <a class="reference external" href="https://www.midi.org/midi-articles/updated-how-to-make-your-own-3-5mm-mini-stereo-trs-to-midi-5-pin-din-cables">MIDI terminology</a>.
+Connect them to other MIDI gear with a compatible connector or to a legacy
+5-pin DIN cable adapter (available as an accessory).
+The MIDI OUT jack can be configured as MIDI Thru.</p></li>
+<li><p><strong>Device</strong> is a USB Type B connector with class-compliant MIDI interface (both
+input and output). Connect it to a DAW etc.</p></li>
+<li><p><strong>Network</strong> is a RJ-45 network connector used for <a class="reference internal" href="#firmware-updates">firmware updates</a>. Connect
+it to a LAN network with Internet access and DHCP.</p></li>
+<li><p><strong>Host</strong> is a USB Type A connector with a class-compliant MIDI interface (both
+input and output). Connect it to a USB MIDI keyboard or a USB flash drive for
+software updates.</p></li>
+<li><p><strong>Power</strong> is a connector for the provided 12V/1A DC
+power supply (5.5/2.1 mm, centre-positive) with a dedicated power switch.</p></li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>It is possible to connect more devices to the <strong>Host</strong> connector using
+a USB hub. Follow the current rating of connected devices; if the
+total current exceeds 500 mA, use a hub with
+external power adapter.
+For software updates, the flash drive has to be connected directly
+without any hubs or cables in between. Do not use hard drives for
+software updates as they might draw too much current.</p>
+</div>
+</section>
+<section id="firmware-updates">
+<h2>Firmware updates<a class="headerlink" href="#firmware-updates" title="Link to this heading"></a></h2>
+<p>Vector can be updated either over network or using a USB flash drive.
+To find if there is an update available, start Vector with a network cable
+connected and navigate to the <strong>Settings screen</strong> <img alt="screen_settings" src="_images/systemSettings.png" style="height: 0.8em;" />. The bar
+in the bottom of the screen will indicate available updates and guide you
+through the update process.</p>
+<p>Please note that some major updates are only available over USB and as such do
+not appear in the <strong>Settings screen</strong>. Check <a class="reference external" href="https://beetlecrab.audio/vector/support/">beetlecrab.audio/vector/support</a> for
+announcements and a detailed description of the firmware update procedure.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Do not power off Vector when a firmware update is in progress.</p>
+</div>
+</section>
+<section id="midi-implementation">
+<h2>MIDI implementation<a class="headerlink" href="#midi-implementation" title="Link to this heading"></a></h2>
+<table class="docutils align-default" id="index-1" style="width: 100%">
+<colgroup>
+<col style="width: 39.0%" />
+<col style="width: 25.0%" />
+<col style="width: 25.0%" />
+<col style="width: 11.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p><strong>Function</strong></p></th>
+<th class="head"><p><strong>Transmitted</strong></p></th>
+<th class="head"><p><strong>Recognized</strong></p></th>
+<th class="head"><p><strong>Note</strong></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Channel</p></td>
+<td><p>1–16</p></td>
+<td><p>1–16</p></td>
+<td><p>*1, *7</p></td>
+</tr>
+<tr class="row-odd"><td><p>Note: Number</p></td>
+<td><p>1–127</p></td>
+<td><p>1–127</p></td>
+<td><p>*2</p></td>
+</tr>
+<tr class="row-even"><td><p>Note: Velocity</p></td>
+<td><p>1–127</p></td>
+<td><p>1–127</p></td>
+<td><p>*2</p></td>
+</tr>
+<tr class="row-odd"><td><p>Pitch Bend</p></td>
+<td><p>–</p></td>
+<td><p>Yes</p></td>
+<td><p>*3</p></td>
+</tr>
+<tr class="row-even"><td><p>Channel Pressure</p></td>
+<td><p>–</p></td>
+<td><p>0–127</p></td>
+<td><p>*4</p></td>
+</tr>
+<tr class="row-odd"><td><p>Key Pressure</p></td>
+<td><p>–</p></td>
+<td><p>0–127</p></td>
+<td><p>*4</p></td>
+</tr>
+<tr class="row-even"><td><p>Program Change</p></td>
+<td><p>–</p></td>
+<td><p>0–49</p></td>
+<td><p>*6</p></td>
+</tr>
+<tr class="row-odd"><td><p>Control Change (CC)</p></td>
+<td><p>–</p></td>
+<td><p>Yes</p></td>
+<td><p>*4</p></td>
+</tr>
+<tr class="row-even"><td><p>Song Position Pointer</p></td>
+<td><p>–</p></td>
+<td><p>Yes</p></td>
+<td><p>*5</p></td>
+</tr>
+<tr class="row-odd"><td><p>Timing: Clock</p></td>
+<td><p>Yes</p></td>
+<td><p>Yes</p></td>
+<td><p>*5</p></td>
+</tr>
+<tr class="row-even"><td><p>Timing: Start</p></td>
+<td><p>Yes</p></td>
+<td><p>Yes</p></td>
+<td><p>*5</p></td>
+</tr>
+<tr class="row-odd"><td><p>Timing: Continue</p></td>
+<td><p>–</p></td>
+<td><p>Yes</p></td>
+<td><p>*5</p></td>
+</tr>
+<tr class="row-even"><td><p>Timing: Stop</p></td>
+<td><p>Yes</p></td>
+<td><p>Yes</p></td>
+<td><p>*5</p></td>
+</tr>
+<tr class="row-odd"><td colspan="4"><p> </p>
+<p><strong>Notes:</strong></p>
+<ol class="arabic simple">
+<li><p>Separate channel for the Arpeggiator is possible, see
+<a class="reference internal" href="configuration.html#midi-configuration"><span class="std std-ref">MIDI configuration</span></a>.</p></li>
+<li><p>Transmitted are notes played by the Arpeggiator and/or
+notes forwarded from the MIDI input if enabled.</p></li>
+<li><p>Range is configurable, see <a class="reference internal" href="configuration.html#midi-configuration"><span class="std std-ref">MIDI configuration</span></a>.</p></li>
+<li><p>Routing is configurable, see
+<a class="reference internal" href="configuration.html#routable-controllers-and-parameters"><span class="std std-ref">Routable controllers and parameters</span></a> and
+<a class="reference internal" href="configuration.html#fixed-controllers-and-parameters"><span class="std std-ref">Fixed controllers and parameters</span></a>.</p></li>
+<li><p>Disabled by default, configurable in the <a class="reference internal" href="configuration.html#tempo"><span class="std std-ref">Tempo</span></a> section.</p></li>
+<li><p>Preset page can be controlled using Bank select CC: 
+0–1 System, 32–34 User, 64–68 External preset pages.</p></li>
+<li><p>Also see <a class="reference internal" href="configuration.html#midi-polyphonic-expression-mpe-support"><span class="std std-ref">MIDI Polyphonic Expression (MPE) support</span></a>.</p></li>
+</ol>
+<p> </p>
+</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="health-and-safety">
+<h2>Health and safety<a class="headerlink" href="#health-and-safety" title="Link to this heading"></a></h2>
+<p>Use common sense when handling Vector. Standard guidelines for handling
+electronic devices apply, which, among others, are:</p>
+<ul class="simple">
+<li><p>Use only the supplied power supply.</p></li>
+<li><p>Do not expose the machine to any liquids or excessive levels of humidity.</p></li>
+<li><p>Do not cover the ventilation holes on back and bottom.</p></li>
+</ul>
+</section>
+<section id="free-and-open-source-software">
+<h2>Free and open-source software<a class="headerlink" href="#free-and-open-source-software" title="Link to this heading"></a></h2>
+<p>Vector is built using many great free and open-source (FOSS) software
+components.</p>
+<p>See <a class="reference external" href="https://beetlecrab.audio/vector/licenses/">beetlecrab.audio/vector/licenses</a> for the license agreement and a complete list
+of the FOSS components used in Vector’s firmware.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="configuration.html" class="btn btn-neutral float-left" title="Configuration" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="genindex.html" class="btn btn-neutral float-right" title="Index" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p></p>
+  </div>
+
+  
+    <p>
+        Copyright &copy; 2016–2026 Beetlecrab s.r.o.
+        Licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.
+    </p>
+    <p>
+        Released June 19, 2026 (firmware version <a href="https://beetlecrab.audio/vector/support/">2.8</a>).
+    </p>
+    <p>
+        Get a <a href="_static/vector_manual.pdf">PDF version</a> of the manual.
+        Visit <a href="https://beetlecrab.audio">beetlecrab.audio</a> for more information.
+    </p>
+
+     
+
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

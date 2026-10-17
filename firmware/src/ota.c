@@ -280,6 +280,44 @@ static int ota_ufw(uint8_t *hdr, uint32_t *fl_off, uint32_t *fl_len, uint32_t *o
     return 0;
 }
 
+#if BOARD_SMK37
+/* SMK-37 Pro: the board check (before anything is erased). The FM-1's official package has the same head
+ * (0x0-0x3FFF) and the same official update loader as the SMK-37 Pro's, so the head check alone lets it
+ * through; its loader then writes the FM-1's flash layout: the factory calibration (BTIF / USRTRIM
+ * 0xC0000-0xC1FFF) is erased and the FM-1's USR image overwrites the SMK's (0xF4000). So a package must be
+ * laid out for the SMK-37 Pro:
+ *   -15  flash.bin is not 0x9D000 bytes (the FM-1's is 0x93000), either loader
+ *   -16  official loader: the package's region table (app offset 0x60, flash 0x4060-0x411F: VM, PRCT,
+ *        BTIF, USRTRIM, USRFLASH, USR) is not this keyboard's. Both are SFC-enciphered at the same
+ *        offset with the same chip key, so equal bytes mean an equal table, and any other key differs.
+ *   -17  official loader: a USR image (UFW entry 50) for another place than 0xF4000 / 0xA000
+ * The screen shows FAILED -15 / -16 / -17; the staging area is not touched. */
+#define OTA_SMK_FL_LEN 0x9D000u
+#define OTA_RT_OFF 0x4060u                       /* the region table in flash.bin and in this flash */
+#define OTA_RT_LEN 0xC0u
+#define OTA_E_FL_LEN (-15)
+#define OTA_E_USR (-17)
+static int ota_board_check(const uint8_t *hdr, uint32_t fl_off, uint32_t fl_len, uint32_t official)
+{
+    static uint8_t pk[OTA_RT_LEN], dv[OTA_RT_LEN];
+    uint32_t i, nent = ota_rd16(hdr + 8);           /* hdr: entries deciphered by ota_ufw */
+    if (fl_len != OTA_SMK_FL_LEN)
+        return OTA_E_FL_LEN;
+    if (!official)
+        return 0;                                   /* our loader: the app area only (ldr_core.c) */
+    if (ota_read(fl_off + OTA_RT_OFF, pk, OTA_RT_LEN) || ota_fread(OTA_RT_OFF, dv, OTA_RT_LEN))
+        return -4;
+    if (!ota_memeq(pk, dv, OTA_RT_LEN))
+        return -16;
+    for (i = 0; i < nent && i < 11u; i++) {
+        const uint8_t *e = hdr + 0x40 + i * 0x50u;
+        if (ota_rd16(e) == 50u && (ota_rd32(e + 0x1C) != 0xF4000u || ota_rd32(e + 0x20) != 0xA000u))
+            return OTA_E_USR;
+    }
+    return 0;
+}
+#endif
+
 static int ota_stage(void)                       /* steps 1..6; 0 = host said success */
 {
     static uint8_t hdr[0x400], b[512], mine[512];
@@ -305,6 +343,10 @@ static int ota_stage(void)                       /* steps 1..6; 0 = host said su
         own = ota_memeq(b + i, (const uint8_t *)"FELUCCA-LOADER-1", 16) && ota_rd32(b + 0x20 + 4) <= 0x14000u;
     if (!official && !own)
         return -7;
+#if BOARD_SMK37
+    if ((rc = ota_board_check(hdr, fl_off, fl_len, official)) != 0)
+        return rc;                                  /* another board's package: nothing staged, nothing erased */
+#endif
     if (official) {                    /* the official loader writes the head: it must equal ours */
         ota_show(2, 0);
         for (i = 0; i < 0x4000u; i += 512u) {
@@ -370,6 +412,9 @@ static int ota_session(void)
     ota_deadline = ota_now_ms() + 120000u;          /* step 1 normally takes ~5 s; a stalled host gives up after 2 min */
     rc = ota_stage();
     if (rc) {
+#if BOARD_SMK37
+        if (rc > OTA_E_FL_LEN || rc < OTA_E_USR)   /* (refused by the board check: nothing to erase) */
+#endif
         ota_unstage();
         ota_show(9, rc);
         return rc;

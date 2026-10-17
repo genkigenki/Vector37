@@ -1,0 +1,17 @@
+
+Introduction
+Welcome to Vector, an experimental exploratory hardware synthesizer combining
+elements of several synthesis methods into a very special expressive blend.
+The operator’s manual is organized as follows:
+Quick start guide shows how to go from zero to sound in a short time
+while showing the major features.
+Overview describes the control elements of Vector.
+Sound engine contains detailed description of all Vector’s features and
+main concepts (such as the Orbiter or Corners) as well as the
+principles of the sound synthesis method.
+Configuration shows available settings and presets.
+Specifications documents MIDI implementation or available connections.
+Note
+Vector is still evolving which means this manual is being updated
+accordingly. Please check docs.beetlecrab.audio/vector for newer versions.
+          

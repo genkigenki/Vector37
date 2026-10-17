@@ -7,8 +7,12 @@
 #define NVOICE 8                /* voices rendered at most (the CPU guard may allow fewer) */
 
 /* per-corner parameters */
-enum { CP_G1, CP_G2, CP_BLEND, CP_CUT, CP_RES, CP_BMODE, CP_FTYPE, CP_TRACK, CP_T1, CP_T2, CP_LEVEL, CP_MUTE, CP_N };
-enum { PAT_A, PAT_B, PAT_C, PAT_D, PAT_E, PAT_F, PAT_N, PAT_COUNT };        /* N: noise */
+enum { CP_G1, CP_G2, CP_BLEND, CP_CUT, CP_RES, CP_BMODE, CP_FTYPE, CP_TRACK, CP_T1, CP_T2, CP_LEVEL, CP_MUTE,
+       CP_WP1, CP_WO1, CP_WP2, CP_WO2,                                      /* a wavetable's position, the orbit's share */
+       CP_N };
+enum { PAT_A, PAT_B, PAT_C, PAT_D, PAT_E, PAT_F, PAT_N,                     /* N: noise */
+       PAT_W1, PAT_W8 = PAT_W1 + 7, PAT_COUNT };                            /* W1..W8: the wavetable banks */
+#define PAT_IS_WT(p) ((uint32_t)(p) >= PAT_W1)
 enum { BM_AM, BM_PM, BM_PMAM, BM_PDAM, BM_RPDAM, BM_N };                    /* the right half of BLEND */
 enum { FT_LP12, FT_LP24, FT_BP, FT_HP, FT_VOX, FT_OFF, FT_N };              /* VOX: the formant filter */
 
@@ -27,6 +31,7 @@ enum {
     G_MORPH,                                                                /* the path family's third parameter */
     G_AUDITION,                                                             /* a changed planet heard alone (UI) */
     G_SPIN,                                                                 /* the path turning on and on, in time */
+    G_WIDTH,                                                                /* the orbit in stereo: 0 mono .. 127 full */
     G_COUNT
 };
 enum { SH_LISSA, SH_STAR, SH_SPIRO, SH_PULSE, SH_ADSR, SH_N };              /* the path families */
@@ -60,7 +65,9 @@ typedef struct {                /* a voice (audio side) */
     int32_t at;                 /* amplitude aim this tick */
     int32_t rx, ry;             /* ADSR shape: where the release started */
     int32_t cut, res;           /* the filter at the orbit's position: cutoff index x 256, resonance */
-    int32_t pan;                /* 0 .. 32767 (left .. right) */
+    int32_t pan;                /* 0 .. 32767 (left .. right): the voices' spread (STEREO) */
+    int32_t wpos[NC][2];        /* each generator's wavetable position, frames x 65536 (-1: not yet) */
+    int32_t opan;               /* the orbit's place left .. right, -32767 .. 32767 (WIDTH scales it) */
     int32_t gl, gr;             /* gains now */
     uint32_t rnd;
     cstate_t cs[NC];

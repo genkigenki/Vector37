@@ -25,7 +25,10 @@ static int recovery_active;
 #define T_AREA 0xBB000u
 #define T_PARM_ID "ota-" SMK_MODEL "_016"
 #else
-#define FELUCCA_ID "FM-1_900"
+#ifndef T_FM1_ID                         /* (-DT_FM1_ID='"FM-1_700"': Vector37's FM-1 build) */
+#define T_FM1_ID "FM-1_900"
+#endif
+#define FELUCCA_ID T_FM1_ID
 #define T_RECOVERY "FM-1_000"
 #define T_AREA 0xE0000u
 #define T_PARM_ID "ota-FM-1_015"
@@ -42,6 +45,7 @@ static uint32_t now_ms, requests, ident_replies, mute_after = 0xFFFFFFFFu, bad_e
 static int committed;
 static uint8_t committed_parm[112];
 static int32_t last_code;
+static uint32_t erases;                  /* ota_erase calls */
 static uint8_t *corrupt_at;              /* flip a served byte (loader body) */
 
 static uint32_t pack7(const uint8_t *in, uint32_t n, uint8_t *out)
@@ -116,6 +120,7 @@ static uint32_t ota_now_ms(void) { return now_ms; }
 static void ota_idle(void) { now_ms += 1; }
 static int ota_erase(uint32_t off)
 {
+    erases++;
     if (off < T_AREA || off >= T_AREA_HI || (off & 0xFFFu)) { bad_erase++; return -8; }
     memset(nor + off, 0xFF, 4096);
     return 0;
@@ -149,6 +154,46 @@ static uint32_t ota_body_off(void)                  /* ota.bin data + 0x20 in th
     return 0;
 }
 
+#if BOARD_SMK37
+/* edit the package's UFW list in place (deciphered, CRCs redone, enciphered again): flash.bin's length, or an
+ * entry 50 (a USR image) at target / size; returns the deciphered header in h */
+static void pkg_edit(uint32_t fl_len, int usr, uint32_t target, uint32_t size, uint8_t *h)
+{
+    uint32_t i, n;
+    memcpy(h, logical, 0x400);
+    ota_jl_enc(h, 0x40);
+    n = ota_rd16(h + 8);
+    for (i = 0; i < n; i++) {
+        uint8_t *e = h + 0x40 + i * 0x50u;
+        ota_jl_enc(e, 0x50);
+        if (ota_rd16(e) == 0 && fl_len)
+            ota_wr32(e + 12, fl_len);
+    }
+    if (usr) {                                         /* one more entry: a USR image, as the stock packer writes it */
+        uint8_t *e = h + 0x40 + n * 0x50u;
+        memset(e, 0, 0x50);
+        ota_wr16(e, 50);
+        ota_wr32(e + 8, 0x400u);
+        ota_wr32(e + 0x1C, target);
+        ota_wr32(e + 0x20, size);
+        memcpy(e + 0x24, "USR", 3);
+        memcpy(e + 0x40, "USR", 3);
+        ota_wr16(h + 8, ++n);
+    }
+    {
+        uint8_t w[0x400];
+        memcpy(w, h, 0x400);
+        for (i = 0; i < n; i++)
+            ota_jl_enc(w + 0x40 + i * 0x50u, 0x50);
+        ota_wr16(h + 2, ota_crc16(w + 0x40, n * 0x50u, 0));    /* (the list's CRC: over the enciphered entries) */
+        ota_wr16(h, ota_crc16(h + 2, 0x3E, 0));
+        memcpy(w, h, 0x40);
+        ota_jl_enc(w, 0x40);
+        memcpy(logical, w, 0x40u + n * 0x50u);
+    }
+}
+#endif
+
 static int check(const char *what, int ok)
 {
     printf("%-52s %s\n", what, ok ? "ok" : "FAIL");
@@ -166,8 +211,11 @@ static void reset_dev(void)
 {
     memset(nor, 0xFF, sizeof nor);
     memcpy(nor, logical + 0x400, 0x4000);                 /* device flash head = package flash.bin head */
+#if BOARD_SMK37
+    memcpy(nor + 0x4060, logical + 0x400 + 0x4060, 0xC0);  /* and its region table: it runs this build */
+#endif
     rx_full = 0; requests = 0; ident_replies = 0; committed = 0; last_code = 0;
-    mute_after = 0xFFFFFFFFu; corrupt_at = NULL; bad_erase = 0;
+    mute_after = 0xFFFFFFFFu; corrupt_at = NULL; bad_erase = 0; erases = 0;
 }
 
 int main(int argc, char **argv)
@@ -248,6 +296,40 @@ int main(int argc, char **argv)
         rc = ota_session();
         bad += check("no 'success' -> -13, no commit, area clean", rc == -13 && !committed && area_erased());
     }
+
+#if BOARD_SMK37
+    /* the board check: another board's package is refused before anything is erased */
+    {
+        static uint8_t keep[0x400], h[0x400];
+        uint32_t fo, fl, oo, ol, fc;
+        memcpy(keep, logical, sizeof keep);
+        reset_dev();
+        bad += check("board check: this package (0x9D000, this flash's table) passes",
+                     !ota_ufw(h, &fo, &fl, &oo, &ol, &fc) && fl == 0x9D000u &&
+                     ota_board_check(h, fo, fl, 0) == 0 && ota_board_check(h, fo, fl, 1) == 0);
+        pkg_edit(0x93000u, 0, 0, 0, h);                    /* the FM-1's flash.bin length */
+        reset_dev();
+        rc = ota_session();
+        bad += check("flash.bin 0x93000 (our loader) -> -15, nothing erased", rc == -15 && !committed && erases == 0 &&
+                     area_erased() && bad_erase == 0);
+        bad += check("... the official loader -> -15", ota_board_check(h, 0x400u, 0x93000u, 1) == -15);
+        memcpy(logical, keep, sizeof keep);
+        reset_dev();
+        nor[0x4070] ^= 0x01;                               /* another region table on the device */
+        bad += check("official loader, another region table -> -16",
+                     ota_board_check(h, 0x400u, 0x9D000u, 1) == -16 && ota_board_check(h, 0x400u, 0x9D000u, 0) == 0);
+        reset_dev();
+        pkg_edit(0, 1, 0xEA000u, 0x12000u, h);             /* the FM-1's USR image (0xEA000) */
+        bad += check("official loader, a USR image for 0xEA000 -> -17", ota_board_check(h, 0x400u, 0x9D000u, 1) == -17);
+        memcpy(logical, keep, sizeof keep);
+        pkg_edit(0, 1, 0xF4000u, 0xA000u, h);
+        bad += check("... a USR image for 0xF4000 / 0xA000 passes", ota_board_check(h, 0x400u, 0x9D000u, 1) == 0);
+        memcpy(logical, keep, sizeof keep);
+        reset_dev();
+        rc = ota_session();
+        bad += check("the package unchanged commits again", rc == 0 && committed);
+    }
+#endif
 
     printf("%s\n", bad ? "OTA TEST FAILED" : "ota test passed");
     return bad != 0;

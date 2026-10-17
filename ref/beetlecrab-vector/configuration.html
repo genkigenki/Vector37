@@ -1,0 +1,760 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Configuration &mdash; Vector Operator&#39;s Manual</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/vector.css?v=60349a46" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=4348de45"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Specifications" href="specs.html" />
+    <link rel="prev" title="Sound engine" href="sound_engine.html" />
+    <!-- Matomo -->
+    <script>
+      var _paq = window._paq = window._paq || [];
+      /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+      _paq.push(['trackPageView']);
+      _paq.push(['enableLinkTracking']);
+      (function() {
+        var u="https://stats.beetlecrab.audio/";
+        _paq.push(['setTrackerUrl', u+'matomo.php']);
+        _paq.push(['setSiteId', '2']);
+        var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+        g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+      })();
+    </script>
+    <!-- End Matomo Code -->
+
+     
+
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html">
+            
+              <img src="_static/logo_white.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick start guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sound_engine.html">Sound engine</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Configuration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#tempo">Tempo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#presets">Presets</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#preset-import-and-export">Preset import and export</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#accessing-individual-presets">Accessing individual presets</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#archiving-all-presets-at-once">Archiving all presets at once</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#routing">Routing</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#routing-table">Routing table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#storing-and-copying">Storing and copying</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#routable-controllers-and-parameters">Routable controllers and parameters</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#midi-polyphonic-expression-mpe-support">MIDI Polyphonic Expression (MPE) support</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#fixed-controllers-and-parameters">Fixed controllers and parameters</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#global-settings">Global settings</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#midi-configuration">MIDI configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#miscellaneous-configuration">Miscellaneous configuration</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="specs.html">Specifications</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="genindex.html">Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Vector</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Configuration</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="configuration">
+<h1>Configuration<a class="headerlink" href="#configuration" title="Link to this heading"></a></h1>
+<section id="tempo">
+<h2>Tempo<a class="headerlink" href="#tempo" title="Link to this heading"></a></h2>
+<p id="index-0">Vector works with a main tempo which is used to synchronize the movement of
+the suborbit, sequencing of the <a class="reference internal" href="sound_engine.html#arpeggiator"><span class="std std-ref">Arpeggiator</span></a> or timing of effects.
+The synchronization of the individual parts can be enabled or disabled by the
+switches in the <a class="reference internal" href="overview.html#sync"><span class="std std-ref">Sync</span></a> section.</p>
+<p>When Vector is <strong>playing</strong> <img alt="play" src="_images/play.png" style="height: 0.8em;" />, the tempo is indicated by an LED next to the
+<strong>Tap</strong> button in the <a class="reference internal" href="overview.html#sync"><span class="std std-ref">Sync</span></a> section. The tempo can be either tapped into the
+button or adjusted by pressing and dragging the BPM indicator on the
+<strong>Effects screen</strong> <img alt="screen_effects" src="_images/sliders.png" style="height: 0.8em;" />. When Vector is <strong>stopped</strong> <img alt="stop" src="_images/stop.png" style="height: 0.8em;" />, no
+tempo is being generated and <a class="reference internal" href="sound_engine.html#orbiter"><span class="std std-ref">Orbiter</span></a> and <a class="reference internal" href="sound_engine.html#arpeggiator"><span class="std std-ref">Arpeggiator</span></a> are also
+stopped.</p>
+<p>The main tempo operates in multiple modes:</p>
+<ul class="simple">
+<li><p><img alt="tempo_standalone" src="_images/tempoStandalone.png" style="height: 0.8em;" /> <strong>Stand-alone Mode</strong>  (default), in which
+the tempo is generated by Vector and used only internally.</p></li>
+<li><p><img alt="tempo_send" src="_images/tempoSend.png" style="height: 0.8em;" /> <strong>Send Mode</strong>, in which the tempo is generated by Vector and
+transmitted over MIDI to other devices.</p></li>
+<li><p><img alt="tempo_receive" src="_images/tempoReceive.png" style="height: 0.8em;" /> <strong>Receive Mode</strong>, in which the tempo is received from an
+external device (such as a drum machine or a sequencer).</p></li>
+</ul>
+<div class="admonition-hints admonition">
+<p class="admonition-title">Hints</p>
+<ul class="simple">
+<li><p>The tempo mode and BPM can be stored persistently on the
+<strong>Settings screen</strong> <img alt="screen_settings" src="_images/systemSettings.png" style="height: 0.8em;" />. See <a class="reference internal" href="#midi-configuration">MIDI configuration</a>.</p></li>
+<li><p>The MIDI tempo can be additionally slowed down by a fixed divider.
+See the Global slowdown parameter in <a class="reference internal" href="#midi-configuration">MIDI configuration</a>.</p></li>
+</ul>
+</div>
+</section>
+<section id="presets">
+<h2>Presets<a class="headerlink" href="#presets" title="Link to this heading"></a></h2>
+<p id="index-1">The <strong>Presets screen</strong> <img alt="screen_presets" src="_images/presets.png" style="height: 0.8em;" /> allows access to presets organized in
+categories and pages (with 50 presets per page).
+A preset contains all parameters defined on the Orbiter and Effects screens.</p>
+<p>The <strong>System presets</strong> category contains read-only presets which can change
+with firmware upgrades while the
+<strong>User presets</strong> have space for presets which can be stored and renamed and are
+preserved during firmware upgrades.
+There are three pages (150 slots) available for the user presets.</p>
+<p id="index-2">To store a preset, select a slot and press <strong>Save</strong>. If the slot is not free,
+it will be overwritten with the new values.
+The <strong>Routing lock</strong> <img alt="routing_lock" src="_images/lockLoadRouting.png" style="height: 0.8em;" /> button next to the Save button controls
+handling of the <a class="reference internal" href="#routing-table">Routing table</a>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Do not power off Vector when saving a preset, wait for the
+confirmation message first.</p>
+</div>
+<div class="admonition-hints admonition">
+<p class="admonition-title">Hints</p>
+<ul class="simple">
+<li><p>The <strong>default preset</strong> (loaded after Vector is powered up) can be
+configured on the <strong>Settings screen</strong> <img alt="screen_settings" src="_images/systemSettings.png" style="height: 0.8em;" />
+(see the <a class="reference internal" href="#miscellaneous-configuration">Miscellaneous configuration</a> section).</p></li>
+<li><p>It is possible to change the current preset by MIDI <strong>Bank Select</strong> and
+<strong>Program Change</strong> messages.
+The Bank Select chooses the preset category and page while the Program
+Change loads an individual preset from that page.</p></li>
+</ul>
+</div>
+<section id="preset-import-and-export">
+<h3>Preset import and export<a class="headerlink" href="#preset-import-and-export" title="Link to this heading"></a></h3>
+<p id="index-3">User presets can be stored to or loaded from a USB drive either
+individually or as a full backup. Only drives formatted to the FAT32 filesystem
+are supported at the moment.</p>
+<p>The external drive connected to the USB Host port can be accessed on the
+<strong>Presets screen</strong> <img alt="screen_presets" src="_images/presets.png" style="height: 0.8em;" />. When a USB drive is plugged in, a third
+category <strong>External</strong> appears alongside <strong>User</strong> and <strong>System</strong>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Always use the <strong>Eject</strong> <img alt="eject" src="_images/ejectFlashdisk.png" style="height: 0.8em;" /> button before physically
+unplugging the external drive to prevent data loss.</p>
+</div>
+<section id="accessing-individual-presets">
+<h4>Accessing individual presets<a class="headerlink" href="#accessing-individual-presets" title="Link to this heading"></a></h4>
+<p>When a USB drive is present, the <strong>External</strong> category allows access to presets
+stored on the drive. This method is useful for transferring presets between
+Vector and a computer.</p>
+<p>The category has 5 pages and supports <strong>Save</strong>, <strong>Load</strong> and <strong>Rename</strong>
+operations in the same way as the <strong>User presets</strong> category.</p>
+<p>Presets on the external drive are stored in a directory named <code class="docutils literal notranslate"><span class="pre">vector-presets</span></code>
+as one file per preset slot. Preset file names are derived from their slot
+numbers (shown in the bottom left corner of each slot).</p>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>To copy a preset from User to External, first load the target preset
+and then save it to a free slot in the <strong>External</strong> category.</p>
+</div>
+</section>
+<section id="archiving-all-presets-at-once">
+<h4>Archiving all presets at once<a class="headerlink" href="#archiving-all-presets-at-once" title="Link to this heading"></a></h4>
+<p>It is also possible to backup or restore an archive containing all
+<strong>User presets</strong> at once. This method is useful for making backups of the
+full preset bank.</p>
+<p>The <strong>Backup</strong> <img alt="backup" src="_images/backupPresets.png" style="height: 0.8em;" /> button archives all User presets to file named
+<code class="docutils literal notranslate"><span class="pre">vector-user-archive.zip</span></code>.
+If the file is already present on the external drive, it is overwritten by the
+backup operation.</p>
+<p>The <strong>Restore</strong> <img alt="restore" src="_images/restorePresets.png" style="height: 0.8em;" /> button overwrites all User presets slots with presets
+present in <code class="docutils literal notranslate"><span class="pre">vector-user-archive.zip</span></code>.
+Preset slots which are used in Vector but are not present in the archive are
+preserved.</p>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>Please note that the preset archive created by the Backup button is
+stored in a different location than presets in the <strong>External</strong>
+category. As a result it is not possible to load only a specific
+preset from the archive; it is only possible to perform a backup or
+restoration of all presets at once.</p>
+</div>
+</section>
+</section>
+</section>
+<section id="routing">
+<h2>Routing<a class="headerlink" href="#routing" title="Link to this heading"></a></h2>
+<p id="index-4">The <strong>Routing screen</strong> <img alt="screen_routing" src="_images/modulation.png" style="height: 0.8em;" /> enables custom mapping from MIDI
+<strong>Controllers</strong> to polyphonic <strong>Parameters</strong>.
+The routing is stored per-preset so that each preset can respond to an
+expressive controller in a different way.</p>
+<p>When a Parameter is connected to a MIDI Controller, its control element on the
+<strong>Orbiter screen</strong> <img alt="screen_orbiter" src="_images/home.png" style="height: 0.8em;" /> or <strong>Effects screen</strong> <img alt="screen_effects" src="_images/sliders.png" style="height: 0.8em;" />
+is marked by a small wave <strong>~</strong>.
+In the following example, Suborbit Speed is routed to a controller while
+Suborbit Size is not connected:</p>
+<figure class="align-center align-default">
+<img alt="_images/routing_knob.png" src="_images/routing_knob.png" style="height: 6em;" />
+</figure>
+<br><section id="routing-table">
+<h3>Routing table<a class="headerlink" href="#routing-table" title="Link to this heading"></a></h3>
+<p>Each <strong>Parameter</strong> is represented by a single row of the multi-page routing
+table:</p>
+<figure class="align-center align-default">
+<img alt="_images/routing.png" src="_images/routing.png" style="width: 100%;" />
+</figure>
+<p id="index-5">The <strong>Controller</strong> button selects one of the supported MIDI message as an
+input for a <strong>Parameter</strong> (or sets it to <strong>Not connected</strong>,
+i.e. not controlled by MIDI).
+In this particular example, the maximum amplitude of each voice (volume) is
+controlled by the velocity of Note On messages.</p>
+<p>The slope and offset of the transfer function from a controller to a parameter
+can be controlled using the <strong>Controller Range</strong> and <strong>Parameter Range</strong>
+columns, each with <strong>Min</strong> and <strong>Max</strong> sliders.
+The shape of the transfer function is displayed in <strong>Preview</strong>.
+In the example above the mapping is 1:1 and no scaling takes place
+(note that the range of MIDI messages is 0 to 127).</p>
+<p id="index-6">Moreover, there are three different <strong>Operators</strong> available for each
+Controller-Parameter pair:</p>
+<ul class="simple">
+<li><p>The <strong>Set</strong> operator overrides the current position of the knob on the
+<a class="reference internal" href="overview.html#front-panel"><span class="std std-ref">Front panel</span></a>.</p></li>
+<li><p>The <strong>Add</strong> operator adds the controller value to the current knob position.
+Values less than or equal 63 are subtracted while values greater than 63 are
+added to the knob position.</p></li>
+<li><p>The <strong>Mul</strong> operator multiplies the controller value with the current knob
+position. This allows to control the maximum possible amount of modulation
+while playing.</p></li>
+</ul>
+<p>Some of the parameters support only the Set operator (Volume and Pitch) while
+some only support the Add and Mul operators
+(the <a class="reference internal" href="sound_engine.html#corners"><span class="std std-ref">corner</span></a> parameters Overtone Blend, Filter Resonance and
+Filter Cutoff).</p>
+<div class="admonition-hints admonition">
+<p class="admonition-title">Hints</p>
+<ul class="simple">
+<li><p>A single controller can transmit to multiple parameters scaled in different
+ways with different operators.</p></li>
+<li><p>To invert a parameter, set Controller range to 0–127 and the Parameter
+range to 127–0.</p></li>
+<li><p>To scale a parameter 2×, set the Controller range to 0–64 and the
+Parameter range to 0–127.</p></li>
+<li><p>The dot in Preview is live and shows the current value of the controller,
+handy for routing verification.</p></li>
+<li><p>The velocity sent by the <a class="reference internal" href="sound_engine.html#arpeggiator"><span class="std std-ref">Arpeggiator</span></a> step sliders can be routed too.</p></li>
+</ul>
+</div>
+</section>
+<section id="storing-and-copying">
+<h3>Storing and copying<a class="headerlink" href="#storing-and-copying" title="Link to this heading"></a></h3>
+<p>The <a class="reference internal" href="#routing-table">Routing table</a> is stored per-preset. To store modifications in a routing
+table, navigate to the <strong>Presets screen</strong> <img alt="screen_presets" src="_images/presets.png" style="height: 0.8em;" />, choose a preset in
+the <strong>User</strong> section and press <strong>Save</strong>.</p>
+<p id="index-7">The <strong>Routing lock</strong> <img alt="routing_lock" src="_images/lockLoadRouting.png" style="height: 0.8em;" /> button next to the Save button allows to
+load or save a preset without modifying the current routing. When active,
+loading a preset will not affect the current routing table and saving or
+overwriting a preset will preserve its original routing table.</p>
+<p>The <strong>Copy</strong> and <strong>Paste</strong> buttons allow to transfer the routing table between
+presets. It is also possible to <strong>Clear</strong> the routing table or initialize it to
+the <strong>Default</strong> state.</p>
+<div class="admonition-hint admonition">
+<p class="admonition-title">Hint</p>
+<p>To copy a routing table from preset A to preset B:</p>
+<ol class="arabic simple">
+<li><p>Load preset A on the <strong>Presets screen</strong> <img alt="screen_presets" src="_images/presets.png" style="height: 0.8em;" />
+(make sure <strong>Routing lock</strong> <img alt="routing_lock" src="_images/lockLoadRouting.png" style="height: 0.8em;" /> is not active).</p></li>
+<li><p>Press <strong>Copy</strong> on the <strong>Routing screen</strong> <img alt="screen_routing" src="_images/modulation.png" style="height: 0.8em;" />.</p></li>
+<li><p>Load preset B on the <strong>Presets screen</strong> <img alt="screen_presets" src="_images/presets.png" style="height: 0.8em;" />.</p></li>
+<li><p>Press <strong>Paste</strong> on the <strong>Routing screen</strong> <img alt="screen_routing" src="_images/modulation.png" style="height: 0.8em;" />.</p></li>
+<li><p>Save preset B on the <strong>Presets screen</strong> <img alt="screen_presets" src="_images/presets.png" style="height: 0.8em;" />.</p></li>
+</ol>
+</div>
+</section>
+<section id="routable-controllers-and-parameters">
+<h3>Routable controllers and parameters<a class="headerlink" href="#routable-controllers-and-parameters" title="Link to this heading"></a></h3>
+<p>The following tables list all controllers and parameters currently available
+for routing. Some of the controllers are inherently polyphonic (which means
+the MIDI controller can modulate the parameters independently for each played
+note/voice) while others are polyphonic only when <a class="reference internal" href="#mpe">MPE</a> is enabled.</p>
+<table class="docutils align-default" id="id3" style="width: 100%">
+<caption><span class="caption-text">Controllers available for routing</span><a class="headerlink" href="#id3" title="Link to this table"></a></caption>
+<colgroup>
+<col style="width: 33.0%" />
+<col style="width: 24.0%" />
+<col style="width: 43.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p><strong>Controller</strong></p></th>
+<th class="head"><p><strong>Polyphonic</strong></p></th>
+<th class="head"><p><strong>Standard MPE function</strong></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Velocity</p></td>
+<td><p>Always</p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>Key Pressure</p></td>
+<td><p>Always</p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>Pitch Bend</p></td>
+<td><p>With <a class="reference internal" href="#mpe">MPE</a></p></td>
+<td><p>Per-note pitch (X)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Channel Pressure</p></td>
+<td><p>With <a class="reference internal" href="#mpe">MPE</a></p></td>
+<td><p>Per-note pressure (Z)</p></td>
+</tr>
+<tr class="row-even"><td><p>Modwheel (CC1)</p></td>
+<td><p>With <a class="reference internal" href="#mpe">MPE</a></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>Timbre (CC71)</p></td>
+<td><p>With <a class="reference internal" href="#mpe">MPE</a></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>Brightness (CC74)</p></td>
+<td><p>With <a class="reference internal" href="#mpe">MPE</a></p></td>
+<td><p>Per-note control (Y)</p></td>
+</tr>
+<tr class="row-odd"><td><p>CC9, CC16, CC17,
+CC89, CC114, CC115</p></td>
+<td><p>With <a class="reference internal" href="#mpe">MPE</a></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default" id="id4" style="width: 100%">
+<caption><span class="caption-text">Parameters available for routing</span><a class="headerlink" href="#id4" title="Link to this table"></a></caption>
+<colgroup>
+<col style="width: 33.3%" />
+<col style="width: 33.3%" />
+<col style="width: 33.3%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p><strong>Page 1</strong></p></th>
+<th class="head"><p><strong>Page 2</strong></p></th>
+<th class="head"><p><strong>Page 3</strong></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Volume</p></td>
+<td><p>Orbiter Offset Y</p></td>
+<td><p>Tremolo Depth</p></td>
+</tr>
+<tr class="row-odd"><td><p>Pitch</p></td>
+<td><p>Suborbit Size</p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>Filter Cutoff</p></td>
+<td><p>Suborbit Speed</p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>Filter Resonance</p></td>
+<td><p>Vibrato Speed</p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p>Overtone Blend</p></td>
+<td><p>Vibrato Depth</p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p>Orbiter Offset X</p></td>
+<td><p>Tremolo Speed</p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<section id="midi-polyphonic-expression-mpe-support">
+<span id="mpe"></span><h4>MIDI Polyphonic Expression (MPE) support<a class="headerlink" href="#midi-polyphonic-expression-mpe-support" title="Link to this heading"></a></h4>
+<p id="index-8">When MPE is enabled in the <a class="reference internal" href="#midi-configuration">MIDI configuration</a> section of
+<strong>Global settings</strong> <img alt="screen_settings" src="_images/systemSettings.png" style="height: 0.8em;" />, any of the available controllers can be
+used to control polyphonic parameters using the channel rotation scheme
+(with channel 1 being a <em>manager channel</em> used for global control applied
+to all voices).</p>
+<p>The MPE standard defines that Pitch Bend is used for per-note pitch variations,
+Channel Pressure for per-note pressure and CC74 for additional per-note control.
+However, as some MPE keyboards and controllers have non-standard configuration,
+the <a class="reference internal" href="#routing-table">Routing table</a> allows to choose from other source options.</p>
+<p>When MPE is disabled, the routed parameters apply to all voices with the
+exception of Velocity and Key Pressure (polyphonic aftertouch).</p>
+</section>
+</section>
+<section id="fixed-controllers-and-parameters">
+<h3>Fixed controllers and parameters<a class="headerlink" href="#fixed-controllers-and-parameters" title="Link to this heading"></a></h3>
+<p>Apart from <a class="reference internal" href="#routable-controllers-and-parameters">Routable controllers and parameters</a> there is a number of
+parameters which are assigned to fixed controllers, listed in the following
+table:</p>
+<table class="docutils align-default" id="id5" style="width: 100%">
+<caption><span class="caption-text">Fixed Control Change (CC) parameters</span><a class="headerlink" href="#id5" title="Link to this table"></a></caption>
+<colgroup>
+<col style="width: 9.0%" />
+<col style="width: 91.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p><strong>CC</strong></p></th>
+<th class="head"><p><strong>Parameter</strong></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>Bank select MSB</p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p><a class="reference internal" href="#routable-controllers-and-parameters"><span class="std std-ref">Routable parameter</span></a></p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>Suborbit size</p></td>
+</tr>
+<tr class="row-odd"><td><p>3</p></td>
+<td><p>Orbiter centre point position X</p></td>
+</tr>
+<tr class="row-even"><td><p>4</p></td>
+<td><p>Orbiter centre point position Y</p></td>
+</tr>
+<tr class="row-odd"><td><p>5</p></td>
+<td><p>Orbiter width</p></td>
+</tr>
+<tr class="row-even"><td><p>6</p></td>
+<td><p>Data entry MSB</p></td>
+</tr>
+<tr class="row-odd"><td><p>7</p></td>
+<td><p>Lissajous shape warp X</p></td>
+</tr>
+<tr class="row-even"><td><p>8</p></td>
+<td><p>Lissajous shape warp Y</p></td>
+</tr>
+<tr class="row-odd"><td><p>9</p></td>
+<td><p><a class="reference internal" href="#routable-controllers-and-parameters"><span class="std std-ref">Routable parameter</span></a></p></td>
+</tr>
+<tr class="row-even"><td><p>10</p></td>
+<td><p>Reverb amount</p></td>
+</tr>
+<tr class="row-odd"><td><p>11</p></td>
+<td><p>Chorus mix</p></td>
+</tr>
+<tr class="row-even"><td><p>12</p></td>
+<td><p>Delay mix</p></td>
+</tr>
+<tr class="row-odd"><td><p>13</p></td>
+<td><p>Envelope attack</p></td>
+</tr>
+<tr class="row-even"><td><p>14</p></td>
+<td><p>Envelope decay</p></td>
+</tr>
+<tr class="row-odd"><td><p>15</p></td>
+<td><p>Envelope sustain</p></td>
+</tr>
+<tr class="row-even"><td><p>16</p></td>
+<td><p><a class="reference internal" href="#routable-controllers-and-parameters"><span class="std std-ref">Routable parameter</span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p>17</p></td>
+<td><p><a class="reference internal" href="#routable-controllers-and-parameters"><span class="std std-ref">Routable parameter</span></a></p></td>
+</tr>
+<tr class="row-even"><td><p>18</p></td>
+<td><p>Vibrato depth</p></td>
+</tr>
+<tr class="row-odd"><td><p>19</p></td>
+<td><p>Tremolo speed</p></td>
+</tr>
+<tr class="row-even"><td><p>20</p></td>
+<td><p>Tremolo depth</p></td>
+</tr>
+<tr class="row-odd"><td><p>21</p></td>
+<td><p>Drive amount</p></td>
+</tr>
+<tr class="row-even"><td><p>22</p></td>
+<td><p>Drive colour</p></td>
+</tr>
+<tr class="row-odd"><td><p>23</p></td>
+<td><p>Reverb size</p></td>
+</tr>
+<tr class="row-even"><td><p>24</p></td>
+<td><p>Reverb colour</p></td>
+</tr>
+<tr class="row-odd"><td><p>25</p></td>
+<td><p>Global resonance</p></td>
+</tr>
+<tr class="row-even"><td><p>26</p></td>
+<td><p>Delay time</p></td>
+</tr>
+<tr class="row-odd"><td><p>27</p></td>
+<td><p>Delay feedback</p></td>
+</tr>
+<tr class="row-even"><td><p>28</p></td>
+<td><p>Chorus speed</p></td>
+</tr>
+<tr class="row-odd"><td><p>29</p></td>
+<td><p>Chorus depth</p></td>
+</tr>
+<tr class="row-even"><td><p>30</p></td>
+<td><p>Chorus colour</p></td>
+</tr>
+<tr class="row-odd"><td><p>31</p></td>
+<td><p>Arpeggiator note length</p></td>
+</tr>
+<tr class="row-even"><td><p>32</p></td>
+<td><p>Bank select LSB</p></td>
+</tr>
+<tr class="row-odd"><td><p>33</p></td>
+<td><p>Stack volume (Mono)</p></td>
+</tr>
+<tr class="row-even"><td><p>34</p></td>
+<td><p>Detune stack (Mono)</p></td>
+</tr>
+<tr class="row-odd"><td><p>35</p></td>
+<td><p>Glide (Mono)</p></td>
+</tr>
+<tr class="row-even"><td><p>36</p></td>
+<td><p>Voices (Mono)</p></td>
+</tr>
+<tr class="row-odd"><td><p>37</p></td>
+<td><p>Follower volume (Dual)</p></td>
+</tr>
+<tr class="row-even"><td><p>38</p></td>
+<td><p>Data entry LSB</p></td>
+</tr>
+<tr class="row-odd"><td><p>39</p></td>
+<td><p>Suborbit offset (Dual)</p></td>
+</tr>
+<tr class="row-even"><td><p>40</p></td>
+<td><p>Stereo bias (Dual)</p></td>
+</tr>
+<tr class="row-odd"><td><p>41</p></td>
+<td><p>Detune drift (Poly)</p></td>
+</tr>
+<tr class="row-even"><td><p>42</p></td>
+<td><p>Stereo scatter (Poly)</p></td>
+</tr>
+<tr class="row-odd"><td><p>43</p></td>
+<td><p>Orbit Attack</p></td>
+</tr>
+<tr class="row-even"><td><p>44</p></td>
+<td><p>Orbit Decay</p></td>
+</tr>
+<tr class="row-odd"><td><p>45</p></td>
+<td><p>Orbit Release</p></td>
+</tr>
+<tr class="row-even"><td><p>46</p></td>
+<td><p>Arpeggiator humanize</p></td>
+</tr>
+<tr class="row-odd"><td><p>47</p></td>
+<td><p>Suborbit Speed</p></td>
+</tr>
+<tr class="row-even"><td><p>48</p></td>
+<td><p>Orbiter height</p></td>
+</tr>
+<tr class="row-odd"><td><p>49</p></td>
+<td><p>Volume</p></td>
+</tr>
+<tr class="row-even"><td><p>50</p></td>
+<td><p>Envelope release</p></td>
+</tr>
+<tr class="row-odd"><td><p>51</p></td>
+<td><p>Vibrato speed</p></td>
+</tr>
+<tr class="row-even"><td><p>52</p></td>
+<td><p>Detune follower (Dual)</p></td>
+</tr>
+<tr class="row-odd"><td><p>64</p></td>
+<td><p>Damper/Sustain pedal (0–63 off, 64–127 on)</p></td>
+</tr>
+<tr class="row-even"><td><p>66</p></td>
+<td><p>Sostenuto pedal (0–63 off, 64–127 on)</p></td>
+</tr>
+<tr class="row-odd"><td><p>89</p></td>
+<td><p><a class="reference internal" href="#routable-controllers-and-parameters"><span class="std std-ref">Routable parameter</span></a></p></td>
+</tr>
+<tr class="row-even"><td><p>114</p></td>
+<td><p><a class="reference internal" href="#routable-controllers-and-parameters"><span class="std std-ref">Routable parameter</span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p>115</p></td>
+<td><p><a class="reference internal" href="#routable-controllers-and-parameters"><span class="std std-ref">Routable parameter</span></a></p></td>
+</tr>
+<tr class="row-even"><td><p>100</p></td>
+<td><p>Registered Parameter Number LSB</p></td>
+</tr>
+<tr class="row-odd"><td><p>101</p></td>
+<td><p>Registered Parameter Number MSB</p></td>
+</tr>
+</tbody>
+</table>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>The <strong>Sustain</strong> controller holds notes until the pedal is
+released. The <strong>Sostenuto</strong> controller works in a similar way but only
+holds notes which were active when the pedal was pressed.</p>
+</div>
+</section>
+</section>
+<section id="global-settings">
+<h2>Global settings<a class="headerlink" href="#global-settings" title="Link to this heading"></a></h2>
+<p>The <strong>Settings screen</strong> <img alt="screen_settings" src="_images/systemSettings.png" style="height: 0.8em;" /> contains global configuration which
+is common for all presets.
+The configuration can be stored using the Save button, reloaded from memory
+using the Load button or reset to defaults using the Default button.</p>
+<section id="midi-configuration">
+<h3>MIDI configuration<a class="headerlink" href="#midi-configuration" title="Link to this heading"></a></h3>
+<p id="index-9">The following MIDI parameters can be set in the <a class="reference internal" href="#global-settings">Global settings</a>:</p>
+<ul class="simple">
+<li><p><strong>Input MIDI channel</strong> for receiving MIDI messages,</p></li>
+<li><p>Separate <strong>Arp in MIDI channel</strong> for Note On/Off events fed into the
+<a class="reference internal" href="sound_engine.html#arpeggiator"><span class="std std-ref">Arpeggiator</span></a> (equals to the <strong>MIDI input channel</strong> by default),</p></li>
+<li><p><strong>Output MIDI channel</strong> for sending MIDI messages (Start/Stop, Timing Clock,
+and also notes received from connected MIDI controllers if
+<strong>Forward MIDI notes</strong> is enabled),</p></li>
+<li><p>Separate <strong>Arp out MIDI channel</strong> for sending notes played by the
+<a class="reference internal" href="sound_engine.html#arpeggiator"><span class="std std-ref">Arpeggiator</span></a> if <strong>Output Arp MIDI notes</strong> is enabled,</p></li>
+<li><p>The option to ignore note velocity and use a
+<strong>Fixed MIDI velocity</strong> to play all notes with the same (maximum) amplitude,</p></li>
+<li><p>The option to divide the received MIDI Timing Clock (depending on the
+<a class="reference internal" href="#tempo"><span class="std std-ref">Tempo</span></a> configuration) by a factor defined by the <strong>Global slowdown</strong>,</p></li>
+<li><p>The option to set the <strong>Tempo sync mode</strong> (OFF for the Stand-alone Mode,
+OUT for Send Mode and IN for the Receive Mode),</p></li>
+<li><p>The option to configure the <strong>Default BPM</strong> used by the main <a class="reference internal" href="#tempo"><span class="std std-ref">Tempo</span></a>,</p></li>
+<li><p>The option to configure <strong>MIDI Out as Through</strong> so that all MIDI messages
+received on the MIDI IN jack are forwarded to the MIDI OUT jack, enabling
+the MIDI Through (Thru) functionality,</p></li>
+<li><p>The option to configure <strong>Pitch bend semitones</strong> from 1 to 24 semitones
+up/down,</p></li>
+<li><p>The option to <strong>Hide MIDI popup</strong> notification, normally displayed when a
+MIDI Control Change (CC) message is received, and</p></li>
+<li><p>The option to <strong>Enable MPE</strong> (MIDI Polyphonic Expression) for the
+<a class="reference internal" href="#routing-table">Routing table</a>.</p></li>
+</ul>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>Both <strong>Input MIDI channel</strong> and <strong>Arp in MIDI channel</strong> can be set
+to receive messages on all sixteen channels simultaneously.</p>
+</div>
+</section>
+<section id="miscellaneous-configuration">
+<h3>Miscellaneous configuration<a class="headerlink" href="#miscellaneous-configuration" title="Link to this heading"></a></h3>
+<p id="index-10">Apart from <a class="reference internal" href="#midi-configuration">MIDI configuration</a>, the <a class="reference internal" href="#global-settings">Global settings</a> screen also contains
+the following configuration options:</p>
+<ul class="simple">
+<li><p>If <strong>Sticky Corner Matrix</strong> is enabled, the Corner Matrix button alternates
+between visible and hidden <a class="reference internal" href="sound_engine.html#corner-matrix"><span class="std std-ref">Corner Matrix</span></a>.
+If disabled, the Corner Matrix stays visible only as long as the button is
+pressed.</p></li>
+<li><p>The <strong>Knob speed</strong> selector allows to increase the rate of change of the 25
+rotary encoders on the front panel.</p></li>
+<li><p>The <strong>Screen brightness</strong> configures the LCD screen brightness in 10 steps.</p></li>
+</ul>
+<p>It is also possible to mark the current preset as default (loaded automatically
+when Vector is powered up) using the <strong>Preset as default</strong> button.</p>
+<div class="admonition-hints admonition">
+<p class="admonition-title">Hints</p>
+<ul class="simple">
+<li><p>The <strong>Settings screen</strong> <img alt="screen_settings" src="_images/systemSettings.png" style="height: 0.8em;" /> also allows for
+<a class="reference internal" href="specs.html#firmware-updates"><span class="std std-ref">Firmware updates</span></a>. User presets are preserved during an update.</p></li>
+<li><p>Updating the default preset must be followed by pressing the <strong>Save</strong>
+button, otherwise it has not effect.</p></li>
+</ul>
+</div>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="sound_engine.html" class="btn btn-neutral float-left" title="Sound engine" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="specs.html" class="btn btn-neutral float-right" title="Specifications" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p></p>
+  </div>
+
+  
+    <p>
+        Copyright &copy; 2016–2026 Beetlecrab s.r.o.
+        Licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.
+    </p>
+    <p>
+        Released June 19, 2026 (firmware version <a href="https://beetlecrab.audio/vector/support/">2.8</a>).
+    </p>
+    <p>
+        Get a <a href="_static/vector_manual.pdf">PDF version</a> of the manual.
+        Visit <a href="https://beetlecrab.audio">beetlecrab.audio</a> for more information.
+    </p>
+
+     
+
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

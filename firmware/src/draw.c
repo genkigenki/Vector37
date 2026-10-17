@@ -17,6 +17,17 @@
 #define SX1 240
 #define SY1 220
 #define PL_OUT 26                                  /* a planet's reach outwards (glow, rings): within the sky */
+/* the pace: the main loop at most every UI_LOOP_MS (main.c), the field at most every UI_FIELD_MS (~60 frames a second;
+ * a frame that takes longer: the next as soon as it is done). What moves by the frame moves by the time: the old
+ * pace was a field frame every 30 ms (UI_FIELD_MS 28, UI_LOOP_MS 15 give the old screens, bit for bit) */
+#ifndef UI_LOOP_MS
+#define UI_LOOP_MS 16u
+#endif
+#ifndef UI_FIELD_MS
+#define UI_FIELD_MS 16u
+#endif
+#define SAMPLE_MS 28u                              /* (the sun's tail, the moon's trail: a place every ~30 ms at most) */
+static uint32_t field_dt = 30u;                    /* (ms since the last field frame, 1 .. 60) */
 
 static const uint8_t CCOL[NC][3] = {{255, 90, 130}, {255, 176, 60}, {176, 120, 255}, {50, 215, 195}};   /* planets */
 static const uint8_t SUN[3] = {80, 150, 255}, MOON[3] = {110, 255, 140};
@@ -40,38 +51,73 @@ static void text_c(int32_t cx, int32_t y, const felucca_font_t *f, const char *s
 static int32_t clip_x0 = -32768, clip_y0 = -32768, clip_x1 = 32767, clip_y1 = 32767;
 static inline int in_clip(int32_t x, int32_t y) { return x >= clip_x0 && x < clip_x1 && y >= clip_y0 && y < clip_y1; }
 /* add light (r g b at k / 256) to a canvas pixel */
-static inline void cv_add(int32_t x, int32_t y, const uint8_t *c, int32_t k)
+static inline void cv_add_at(uint16_t *px, const uint8_t *c, int32_t k)   /* (k > 0) */
 {
-    uint32_t i, p, r, g, b;
+    uint32_t p = swap16(*px), r, g, b;
+    r = ((p >> 11) << 3) + (uint32_t)(c[0] * k >> 8);
+    g = (((p >> 5) & 63u) << 2) + (uint32_t)(c[1] * k >> 8);
+    b = ((p & 31u) << 3) + (uint32_t)(c[2] * k >> 8);
+    *px = swap16(RGB(r > 255u ? 255u : r, g > 255u ? 255u : g, b > 255u ? 255u : b));
+}
+static __attribute__((noinline)) void cv_add(int32_t x, int32_t y, const uint8_t *c, int32_t k)
+{
     if (!in_clip(x, y))
         return;
     x += cv_ox, y += cv_oy;
     if ((uint32_t)x >= cv_w || (uint32_t)y >= cv_h || k <= 0)
         return;
-    i = (uint32_t)y * cv_w + (uint32_t)x;
-    p = swap16(cv_px[i]);
-    r = ((p >> 11) << 3) + (uint32_t)(c[0] * k >> 8);
-    g = (((p >> 5) & 63u) << 2) + (uint32_t)(c[1] * k >> 8);
-    b = ((p & 31u) << 3) + (uint32_t)(c[2] * k >> 8);
-    cv_px[i] = swap16(RGB(r > 255u ? 255u : r, g > 255u ? 255u : g, b > 255u ? 255u : b));
+    cv_add_at(&cv_buf[(uint32_t)y * cv_w + (uint32_t)x], c, k);
 }
-/* a soft glow of radius r, brightness k (falls off with the square of the distance) */
+/* the part of the screen the canvas holds, within the clip (x0 <= x < x1); clip: 0 the canvas alone */
+static void cv_view(int clip, int32_t *x0, int32_t *y0, int32_t *x1, int32_t *y1)
+{
+    *x0 = -cv_ox, *y0 = -cv_oy, *x1 = (int32_t)cv_w - cv_ox, *y1 = (int32_t)cv_h - cv_oy;
+    if (clip) {
+        *x0 = *x0 > clip_x0 ? *x0 : clip_x0, *y0 = *y0 > clip_y0 ? *y0 : clip_y0;
+        *x1 = *x1 < clip_x1 ? *x1 : clip_x1, *y1 = *y1 < clip_y1 ? *y1 : clip_y1;
+    }
+}
+/* a soft glow of radius r, brightness k (falls off with the square of the distance); only the canvas' rows and
+ * columns are visited (the same pixels as each tested) */
 static void glow(int32_t cx, int32_t cy, int32_t r, const uint8_t *c, int32_t k)
 {
-    int32_t x, y, r2 = r * r;
-    for (y = -r; y <= r; y++)
-        for (x = -r; x <= r; x++) {
-            int32_t d = x * x + y * y;
-            if (d < r2)
-                cv_add(cx + x, cy + y, c, k * (r2 - d) / r2 * (r2 - d) / r2);
+    int32_t x, y, r2 = r * r, vx0, vy0, vx1, vy1, xa, xb, ya, yb;
+    uint32_t inv;
+    if (k <= 0 || r <= 0)
+        return;                                    /* (nothing: every pixel's light would be <= 0) */
+    /* n / r2 as (n * inv) >> 32, inv = 2^32 / r2 rounded up: exact while n * r2 < 2^32 (n <= k * r2: k < 2^32 / r2^2,
+     * k <= 300 and r <= 40 here); no division a pixel */
+    inv = 0xFFFFFFFFu / (uint32_t)r2 + 1u;
+    if ((uint64_t)(uint32_t)k * (uint32_t)r2 * (uint32_t)r2 >= 0x100000000ull)
+        inv = 0;                                   /* (out of that range: divided, as before) */
+    cv_view(1, &vx0, &vy0, &vx1, &vy1);
+    xa = vx0 - cx > -r ? vx0 - cx : -r, xb = vx1 - 1 - cx < r ? vx1 - 1 - cx : r;
+    ya = vy0 - cy > -r ? vy0 - cy : -r, yb = vy1 - 1 - cy < r ? vy1 - 1 - cy : r;
+    for (y = ya; y <= yb; y++) {
+        uint16_t *row = cv_buf + ((cy + y + cv_oy) * (int32_t)cv_w + cx + cv_ox);
+        for (x = xa; x <= xb; x++) {
+            int32_t d = x * x + y * y, v;
+            if (d >= r2)
+                continue;
+            if (inv) {
+                uint32_t e = (uint32_t)(r2 - d), q = (uint32_t)(((uint64_t)((uint32_t)k * e) * inv) >> 32);
+                v = (int32_t)(uint32_t)(((uint64_t)(q * e) * inv) >> 32);
+            } else
+                v = k * (r2 - d) / r2 * (r2 - d) / r2;
+            if (v > 0)
+                cv_add_at(row + x, c, v);
         }
+    }
 }
 static void disc(int32_t cx, int32_t cy, int32_t r, uint16_t col)
 {
-    int32_t x, y;
-    for (y = -r; y <= r; y++)
-        for (x = -r; x <= r; x++)
-            if (x * x + y * y <= r * r + r && in_clip(cx + x, cy + y))
+    int32_t x, y, vx0, vy0, vx1, vy1, xa, xb, ya, yb;
+    cv_view(1, &vx0, &vy0, &vx1, &vy1);
+    xa = vx0 - cx > -r ? vx0 - cx : -r, xb = vx1 - 1 - cx < r ? vx1 - 1 - cx : r;
+    ya = vy0 - cy > -r ? vy0 - cy : -r, yb = vy1 - 1 - cy < r ? vy1 - 1 - cy : r;
+    for (y = ya; y <= yb; y++)
+        for (x = xa; x <= xb; x++)
+            if (x * x + y * y <= r * r + r)
                 cv_pset(cx + x, cy + y, col);
 }
 
@@ -94,6 +140,7 @@ static void corner_xy(uint32_t c, int32_t *x, int32_t *y)
 static struct {
     int16_t tx[TRAJ_N], ty[TRAJ_N];                /* the path, 1/16 pixels */
     uint16_t ntj;                                  /* its points now */
+    int16_t tjb[TRAJ_N / 32u][4];                  /* (each 32 points' box, pixels: x0 y0 x1 y1) */
     uint32_t thash;                                /* (the path's key) */
     int16_t sx, sy, mx, my, mr;                    /* sun, moon, the moon's ring radius */
     int32_t sx16, sy16, mr16, mx16, my16;          /* the sun, the moon's ring radius, the moon, 1/16 pixels */
@@ -155,6 +202,16 @@ static void traj_at(uint32_t p, int32_t *nx, int32_t *ny)    /* a path point in 
     orbit_place(&x, &y);
     *nx = FX0 * 16 + (((x + 32768) * (FW - 1)) >> 12), *ny = FY0 * 16 + (((y + 32768) * (FW - 1)) >> 12);
 }
+static void traj_boxes(void)                       /* each 32 points' box (field_draw skips what a strip misses) */
+{
+    uint32_t i;
+    for (i = 0; i < sc.ntj; i++) {
+        int16_t *b = sc.tjb[i / 32u], x = (int16_t)(sc.tx[i] >> 4), y = (int16_t)(sc.ty[i] >> 4);
+        if (!(i & 31u))
+            b[0] = b[2] = x, b[1] = b[3] = y;
+        b[0] = x < b[0] ? x : b[0], b[1] = y < b[1] ? y : b[1], b[2] = x > b[2] ? x : b[2], b[3] = y > b[3] ? y : b[3];
+    }
+}
 static void traj_update(void)
 {
     static uint32_t t_last, cost = 120u;           /* (the last redraw's pixels: SPIN redraws as often as the SPI
@@ -200,6 +257,7 @@ static void traj_update(void)
         break;
     }
     sc.ntj = (uint16_t)n;
+    traj_boxes();
     traj_mark();                                   /* (where it is) */
     {
         uint32_t t1 = 0, m;
@@ -213,10 +271,20 @@ static void traj_update(void)
 
 static int16_t star_xy(uint32_t i, int32_t *x, int32_t *y)   /* a star's place; its base brightness */
 {
-    uint32_t h = hash3((int32_t)i, 7, 99u);
-    *x = SX0 + 1 + (int32_t)(h % (SX1 - SX0 - 2));
-    *y = SY0 + 1 + (int32_t)((h >> 12) % (SY1 - SY0 - 2));
-    return (int16_t)(50 + (h >> 24) % 150u);
+    static uint8_t sx[NSTAR], sy[NSTAR], sb[NSTAR], ready;   /* (fixed: worked out once) */
+    if (!ready) {
+        uint32_t j, h;
+        for (j = 0; j < NSTAR; j++) {
+            h = hash3((int32_t)j, 7, 99u);
+            sx[j] = (uint8_t)(SX0 + 1 + (int32_t)(h % (SX1 - SX0 - 2)));
+            sy[j] = (uint8_t)(SY0 + 1 + (int32_t)((h >> 12) % (SY1 - SY0 - 2)));
+            sb[j] = (uint8_t)(50 + (h >> 24) % 150u);
+        }
+        ready = 1;
+    }
+    i %= NSTAR;
+    *x = sx[i], *y = sy[i];
+    return (int16_t)sb[i];
 }
 static int32_t star_k(uint32_t i, uint32_t t)      /* its brightness now: a slow twinkle */
 {
@@ -300,8 +368,13 @@ static void planet(uint32_t c, int32_t x, int32_t y, int32_t mute)
         for (px = 0; px < rw; px++)
             cv_pset(x + ((cosq(a) * rx) >> 15), y + ((s * ry) >> 15) + px, rc);
     }
-    for (py = -R; py <= R; py++)                     /* the body: lit from the top left, striped */
-        for (px = -R; px <= R; px++) {
+    {
+    int32_t vx0, vy0, vx1, vy1, xa, xb, ya, yb;
+    cv_view(0, &vx0, &vy0, &vx1, &vy1);              /* (the body: the canvas' part of it) */
+    xa = vx0 - x > -R ? vx0 - x : -R, xb = vx1 - 1 - x < R ? vx1 - 1 - x : R;
+    ya = vy0 - y > -R ? vy0 - y : -R, yb = vy1 - 1 - y < R ? vy1 - 1 - y : R;
+    for (py = ya; py <= yb; py++)                    /* the body: lit from the top left, striped */
+        for (px = xa; px <= xb; px++) {
             int32_t d = px * px + py * py, lk;
             if (d > R2)
                 continue;
@@ -313,6 +386,7 @@ static void planet(uint32_t c, int32_t x, int32_t y, int32_t mute)
             lk = ((lk * lf >> 8) * dim >> 8) * fade >> 8;
             cv_pset(x + px, y + py, rgbk(CCOL[c], lk));
         }
+    }
     for (k = 0; b && k < 128; k++) {                 /* the ring's front half */
         uint32_t a = (uint32_t)k << 25;
         int32_t s = sinq(a), dash = 2 + q[CP_BMODE];
@@ -366,7 +440,9 @@ static void tri_fill(int32_t ax, int32_t ay, int32_t bx, int32_t by, int32_t cx,
 {
     int32_t x0 = ax < bx ? (ax < cx ? ax : cx) : (bx < cx ? bx : cx), x1 = ax > bx ? (ax > cx ? ax : cx) : (bx > cx ? bx : cx);
     int32_t y0 = ay < by ? (ay < cy ? ay : cy) : (by < cy ? by : cy), y1 = ay > by ? (ay > cy ? ay : cy) : (by > cy ? by : cy), x, y;
-    int32_t s = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+    int32_t s = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax), vx0, vy0, vx1, vy1;
+    cv_view(0, &vx0, &vy0, &vx1, &vy1);              /* (only the canvas' part: the same pixels) */
+    x0 = x0 > vx0 ? x0 : vx0, y0 = y0 > vy0 ? y0 : vy0, x1 = x1 < vx1 - 1 ? x1 : vx1 - 1, y1 = y1 < vy1 - 1 ? y1 : vy1 - 1;
     for (y = y0; y <= y1; y++)
         for (x = x0; x <= x1; x++) {
             int32_t e0 = (bx - ax) * (y - ay) - (by - ay) * (x - ax), e1 = (cx - bx) * (y - by) - (cy - by) * (x - bx);
@@ -404,12 +480,14 @@ static void bubble_box(uint32_t c, int32_t w, int32_t h, int32_t *x0, int32_t *y
 #define OV_W 158                                   /* the overview bubble */
 #define OV_H 138
 #define OVM_H 104                                  /* (several planets: one bubble in the middle, between them) */
+#define OV_WAVE 5u                                 /* (sc.ov: the WAVE set's bubble; 1..4 the pad groups' lists) */
+#define WV_H 120
 static int ov_overview(void) { return sc.kb || sc.ov == PG_SELECT + 1u; }
 static int ov_multi(void) { return ov_overview() && (sc.ovm & (sc.ovm - 1u)) != 0u; }
 static void bubble_size(int32_t *w, int32_t *h)
 {
-    *w = ov_overview() ? OV_W : 112;
-    *h = ov_multi() ? OVM_H : ov_overview() ? OV_H : 126;
+    *w = ov_overview() || sc.ov == OV_WAVE ? OV_W : 112;
+    *h = ov_multi() ? OVM_H : ov_overview() ? OV_H : sc.ov == OV_WAVE ? WV_H : 126;
 }
 static void bubble_place(int32_t *bx, int32_t *by, int32_t *w, int32_t *h)   /* the bubble's box now */
 {
@@ -423,18 +501,70 @@ static void bubble_place(int32_t *bx, int32_t *by, int32_t *w, int32_t *h)   /* 
 static const char *const BM_S[BM_N] = {"AM", "PM", "PMAM", "PDAM", "RPD"};
 static const char *const KSHORT[L_N][8] = {
     [L_MAIN] = {"G1", "G2", "T2", "BL", "MD", "CUT", "RES", "LVL"},
-    [L_ORBIT] = {"WRP", "WY", "ROT", "CON", "DST", "SPN", "RST", "BPM"},
-    [L_VOICE] = {"ATK", "DEC", "SUS", "REL", "DET", "GLD", "STK", "STR"},
+    [L_ORBIT] = {"WRP", "WY", "ROT", "CON", "DST", "SPN", "WID", "BPM"},
+    [L_VOICE] = {"ATK", "DEC", "SUS", "REL", "DET", "GLD", "VCS", "STR"},
     [L_FX] = {"REV", "DLY", "CHO", "DRV", "RVS", "DLT", "DFB", "VOL"},
     [L_CORNER] = {"T1", "TRK", "FT", "DCL", "CHD", "CHS", "RVC", "AUD"},
     [L_ARP] = {"AR", "BPM", "OA", "OD", "OS", "OR", "BND", "TRS"},
+    [L_WAVE] = {"POS1", "ORB1", "POS2", "ORB2", "", "", "", ""},
+    [L_SETUP] = {"OUT", "IN", "PAD", "SND", "", "", "", ""},
 };
 static const char *const GROUP_NAME[4] = {"SELECT", "MODE", "FILTER", "MUTE"};
+#if BOARD_SMK37
+#define KLAB(k, v) (v)
+#define KOFF(k) 0
+#define KTAG(k, x, y) ((void)0)
+#else
+/* the FM-1: KNOB 1..4 play one row of the eight (panel_fm1.c panel_krow): its cells carry the knob's number in a
+ * tag of its colour at their right end (x: that end), the other row is dimmer */
+#define KLAB(k, v) (panel_krow() < 0 || (int32_t)((k) >> 2) == panel_krow() ? (v) : (v) * 2 / 5)
+#define KOFF(k) ((int32_t)((k) >> 2) == panel_krow() ? 11 : 0)
+static void ktag(uint32_t k, int32_t x, int32_t y)
+{
+    char d[2] = {(char)('1' + (k & 3u)), 0};
+    if ((int32_t)(k >> 2) != panel_krow())
+        return;
+    cv_rect(x - 10, y + 2, 9, 13, rgbk(KCOL[k], 256));
+    cv_text(x - 9, y, &FONT_S, d, RGB(8, 8, 24));
+}
+#define KTAG(k, x, y) ktag(k, x, y)
+#endif
 static const int8_t FAM_PIC[SH_N][3] = {{0, -64, -39}, {0, 30, -14}, {30, 30, -14}, {0, -40, 0}, {30, -30, 0}};   /* a family's
                                                    picture (by FAM_ORDER place): WARP, WARP Y, MORPH */
 static void shape_icon(int32_t x, int32_t y, int32_t w, int32_t h, int32_t fam, int32_t wx, int32_t wy, int32_t mo, uint16_t col);
 
 /* ------------------------------------------------------------- the overview's pictures --- */
+/* a wavetable as it reads now: the newest voice's position, else where the free orbit's moon puts it */
+static int32_t wt_live(uint32_t c, uint32_t g)
+{
+    const voice_t *v = &vs[syn.newest % NVOICE];
+    if (v->stage && v->wpos[0][0] >= 0)
+        return clamp(v->wpos[c][g], 0, WT_SPAN);
+    return wt_pos(pt.c[c], g, syn.gx, syn.gy, c);
+}
+static void g_wt(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t bank, int32_t pos, uint16_t col)   /* its frame */
+{
+    const int16_t *a = WT_DATA + (bank % WT_NB * WT_NF + (uint32_t)(pos >> 16)) * WT_FR, *b = (pos >> 16) + 1 < WT_NF ? a + WT_FR : a;
+    int32_t i, px = 0, py = 0, f = (pos & 0xFFFF) >> 1;
+    w = w > 128 ? 128 : w;
+    for (i = 0; i < w; i++) {                      /* (level 0: 128 samples, peak <= 28000) */
+        int32_t j = i * 128 / w, v = a[j] + (((b[j] - a[j]) * f) >> 15), ny = y + h / 2 - v * (h / 2 - 1) / 28000;
+        if (i)
+            cv_line(px, py, x + i, ny, col);
+        px = x + i, py = ny;
+    }
+}
+/* where a generator reads in its bank: a line (frames 1 .. 32), WT POS a tick, the moon's reach (WT ORBIT) lit, the
+ * place now a dot */
+static void g_wtpos(int32_t x, int32_t y, int32_t w, const int16_t *q, uint32_t g, int32_t live, uint16_t tick, uint16_t reach)
+{
+    int32_t base = q[g ? CP_WP2 : CP_WP1] * (w - 1) / 127, amt = q[g ? CP_WO2 : CP_WO1] * (w - 1) / 64, a, b;
+    a = clamp(base + (amt < 0 ? amt : 0), 0, w - 1), b = clamp(base + (amt > 0 ? amt : 0), 0, w - 1);
+    cv_rect(x, y, w, 1, RGB(60, 62, 96));
+    cv_rect(x + a, y, b - a + 1, 1, reach);
+    cv_rect(x + base, y - 2, 1, 5, tick);
+    cv_rect(x + (int32_t)((int64_t)live * (w - 1) / WT_SPAN) - 1, y - 1, 3, 3, RGB(255, 255, 255));
+}
 static void g_wave(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t pat, uint16_t col)   /* a pattern's period */
 {
     int32_t i, px = 0, py = 0, m = 1, v[80];
@@ -544,11 +674,21 @@ static void g_filter(int32_t x, int32_t y, int32_t w, int32_t h, const int16_t *
 /* knob k's picture for planet c (k 5, 6: one filter curve; lit: the knob turned, or -1; big: the enlarged one) */
 static void ov_pic(uint32_t k, int32_t x, int32_t y, int32_t w, int32_t h, const int16_t *q, uint32_t c, int32_t lit, int big)
 {
-    uint16_t col = rgbk(CCOL[c], 256), dim = rgbk(CCOL[c], 80);
+    uint16_t col, dim;
+    if (x - 4 + cv_ox >= (int32_t)cv_w || x + w + 4 + cv_ox <= 0 || y - 4 + cv_oy >= (int32_t)cv_h || y + h + 4 + cv_oy <= 0)
+        return;                                    /* (the picture, a little round it, off the canvas: not drawn) */
+    col = rgbk(CCOL[c], 256), dim = rgbk(CCOL[c], 80);
     switch (k) {
-    case 0: case 1:
-        g_wave(x, y, w, h, (uint32_t)q[k ? CP_G2 : CP_G1] % PAT_COUNT, col);
+    case 0: case 1: {
+        uint32_t pat = (uint32_t)q[k ? CP_G2 : CP_G1] % PAT_COUNT;
+        if (PAT_IS_WT(pat)) {                      /* a wavetable: its frame now, where it reads (a bar) */
+            int32_t live = wt_live(c, k);
+            g_wt(x, y, w, h - 3, pat - PAT_W1, live, col);
+            g_wtpos(x, y + h - 1, w, q, k, live, rgbk(KCOL[2 * k], 256), rgbk(KCOL[2 * k + 1], 200));
+        } else
+            g_wave(x, y, w, h, pat, col);
         break;
+    }
     case 2:
         if (big) {                                 /* GEN 1 over GEN 2: n periods against one */
             g_sine(x, y, w, h / 2, (uint32_t)q[CP_T2] % 5u + 1u, rgbk(KCOL[0], 230));
@@ -622,8 +762,10 @@ static void overview(uint32_t c, int32_t bx, int32_t by, int32_t w)
         }
     for (k = 0; k < 8; k++) {
         int32_t x = bx + 5 + (k & 3) * cw, y = by + 57 + (k >> 2) * 39;
-        cv_text(x + 1, y, &FONT_S, KSHORT[L_MAIN][k], rgbk(KCOL[k], kl < 0 || k == kl ? 256 : 200));
-        if (k <= 1) {                              /* (the pattern's letter) */
+        KTAG(k, x + cw - 2, y);
+        cv_text(x + 1, y, &FONT_S, KSHORT[L_MAIN][k], rgbk(KCOL[k], KLAB(k, kl < 0 || k == kl ? 256 : 200)));
+        if (k <= 1 && !KOFF(k) && !PAT_IS_WT((uint32_t)q[k ? CP_G2 : CP_G1] % PAT_COUNT)) {   /* (the pattern's letter;
+                                                      the FM-1's tag in its place; a wavetable: its bar instead) */
             const char *l = N_PAT[q[k ? CP_G2 : CP_G1] % PAT_COUNT];
             cv_text(x + cw - 4 - text_w(&FONT_S, l), y, &FONT_S, l, rgbk(CCOL[c], 256));
         }
@@ -703,7 +845,8 @@ static void overview_multi(uint32_t m, int32_t bx, int32_t by, int32_t w)
         const pdesc_t *p = &CDESC[LAYERS[L_MAIN].k[k].id];
         uint32_t id = LAYERS[L_MAIN].k[k].id;
         int32_t cx = bx + 5 + (k & 3) * cw, cy = by + 24 + (k >> 2) * 39, tw = cw - 6;
-        cv_text(cx + 1, cy, &FONT_S, KSHORT[L_MAIN][k], rgbk(KCOL[k], kl < 0 || k == kl ? 256 : 200));
+        KTAG(k, cx + cw - 2, cy);
+        cv_text(cx + 1, cy, &FONT_S, KSHORT[L_MAIN][k], rgbk(KCOL[k], KLAB(k, kl < 0 || k == kl ? 256 : 200)));
         if (k != 6)
             ov_pic((uint32_t)k, cx + 1, cy + 16, k == 5 ? 2 * cw - 4 : cw - 4, 14, pt.c[c0], c0, kl, 0);
         cv_rect(cx + 1, cy + 34, tw, 1, RGB(70, 72, 110));     /* the track: a dot per planet */
@@ -742,6 +885,55 @@ static void bubble_multi(uint32_t m, int32_t x0, int32_t y0, int32_t x1, int32_t
         }
     sc.tails = (uint8_t)m;
 }
+/* the WAVE set's bubble (SCALE held, a planet selected): each generator's wavetable, its frame as it reads now, where
+ * it reads in its bank (WT POS a tick, the moon's reach WT ORBIT lit, the place now a dot), the knobs' values in their
+ * colours */
+static void wave_panel(uint32_t c, int32_t bx, int32_t by, int32_t w)
+{
+    const int16_t *q = pt.c[c];
+    char d[2] = {(char)('1' + c), 0};
+    uint32_t g;
+    int32_t kl = sc.gk ? (int32_t)sc.gk - 1 : -1;
+    cv_text(bx + 6, by + 3, &FONT_S, "WAVE", RGB(220, 228, 255));
+    cv_text(bx + 46, by + 3, &FONT_S, d, rgbk(CCOL[c], 256));
+    for (g = 0; g < 2u; g++) {
+        uint32_t pat = (uint32_t)q[g ? CP_G2 : CP_G1] % PAT_COUNT;
+        int32_t y = by + 22 + (int32_t)g * 48, k;
+        char b[24];
+        str_cpy(b, g ? "G2 " : "G1 ", sizeof b);
+        str_cat(b, N_PAT[pat], sizeof b);
+        if (!PAT_IS_WT(pat)) {
+            cv_text(bx + 6, y, &FONT_S, b, rgbk(CCOL[c], 140));
+            cv_text(bx + 6, y + 16, &FONT_S, "NO WAVETABLE", RGB(90, 96, 140));
+            continue;
+        }
+        str_cat(b, " ", sizeof b);
+        str_cat(b, N_WT[pat - PAT_W1], sizeof b);
+        cv_text(bx + 6, y, &FONT_S, b, rgbk(CCOL[c], 256));
+        {
+            int32_t live = wt_live(c, g);
+            cv_rect(bx + w - 66, y + 17, 60, 27, RGB(18, 16, 44));
+            g_wt(bx + w - 66, y + 18, 60, 25, pat - PAT_W1, live, rgbk(CCOL[c], 256));
+            g_wtpos(bx + 6, y + 40, w - 78, q, g, live, rgbk(KCOL[2 * g], 256), rgbk(KCOL[2 * g + 1], 220));
+        }
+        for (k = 0; k < 2; k++) {                  /* WT POS, WT ORBIT: a mark in the knob's colour (the FM-1: its
+                                                      number), the value; white while turned */
+            uint32_t kk = 2u * g + (uint32_t)k;
+            int32_t v = q[(g ? CP_WP2 : CP_WP1) + k], x = bx + 6 + k * 40;
+            char t[8];
+            if (k && v > 0) {
+                t[0] = '+';
+                fmt_int(t + 1, v);
+            } else
+                fmt_int(t, v);
+            if (KOFF(kk))
+                KTAG(kk, x + 10, y + 18);
+            else
+                cv_rect(x + 1, y + 21, 5, 10, rgbk(KCOL[kk], 256));
+            cv_text(x + 12, y + 18, &FONT_S, t, (int32_t)kk == kl ? RGB(255, 255, 255) : rgbk(KCOL[kk], 230));
+        }
+    }
+}
 static void bubble_draw(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
 {
     uint32_t c = sc.ovc & 3u;
@@ -760,6 +952,8 @@ static void bubble_draw(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
     sc.tails = (uint8_t)(1u << c);
     if (ov_overview())
         overview(c, bx, by, w);
+    else if (sc.ov == OV_WAVE)
+        wave_panel(c, bx, by, w);
     else
         pad_list(c, (sc.ov - 1u) & 3u, bx, by, w, h);
 }
@@ -810,9 +1004,14 @@ static const char *orbit_hint(uint32_t id)          /* the orbit's knobs, said p
     case G_ROT: return "TURNS THE PATH|ROUND THE MIDDLE";
     case G_SHARP: return "HOW MUCH A PLANET|TAKES OVER NEAR IT";
     case G_SUBSZ: return "HOW FAR THE MOON|IS FROM THE SUN";
+#if BOARD_SMK37
     case G_SUBSPD: return "HOW FAST THE MOON|CIRCLES (MOD WHEEL)";
+#else
+    case G_SUBSPD: return "HOW FAST THE MOON|CIRCLES THE SUN";
+#endif
     case G_SPIN: return "THE WHOLE PATH|TURNS, IN TIME";
     case G_RETRIG: return "EACH NOTE STARTS|THE PATH ANEW";
+    case G_WIDTH: return "THE ORBIT HEARD|LEFT AND RIGHT";
     case G_TEMPO: return "THE CLOCK: PATH|SPEED, DELAY, ARP";
     default: return "";
     }
@@ -885,8 +1084,11 @@ static void central_draw(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
             knob_text(k, &lab, v, sizeof v);
             if (d->corner == 0u && d->id == G_ARP)
                 str_cpy(v, (const char *const[]){"OFF", "UP", "DOWN", "UPDN", "RND"}[pt.g[G_ARP] % ARP_N], sizeof v);
+            if (d->corner == 3u && pt.g[G_POLY] == PM_MONO)   /* (VOICES: "MON3") */
+                v[3] = (char)('0' + clamp(pt.g[G_STACK], 1, NVOICE));
             v[4] = 0;
-            cv_text(cx, cy, &FONT_S, KSHORT[ui.layer][k], rgbk(KCOL[k], 240));
+            KTAG(k, cx + 39, cy);
+            cv_text(cx, cy, &FONT_S, KSHORT[ui.layer][k], rgbk(KCOL[k], KLAB(k, 240)));
             if (d->corner == 1u) {                 /* (a planet's: its dot, its colour) */
                 disc(cx + text_w(&FONT_S, KSHORT[ui.layer][k]) + 4, cy + 8, 2, rgbk(CCOL[c], 256));
                 cv_text(cx, cy + 15, &FONT_S, v, rgbk(CCOL[c], 256));
@@ -975,6 +1177,20 @@ static uint32_t mt_w, mt_n;
 static uint8_t mt_src = 254;
 static int16_t mt_hx = -1, mt_hy;                  /* (the moon, as the last piece was drawn to it) */
 static const int16_t MT_K[7] = {0, 35, 70, 110, 150, 195, 245};
+static int16_t mtb[MT_N / 32u][4];                 /* (each 32 pieces' box, 1/16 pixels: field_draw skips the rest) */
+static uint32_t mt_idx(uint32_t k);
+static void mt_boxes(void)
+{
+    uint32_t i;
+    for (i = 0; i < mt_n && mt_hx >= 0; i++) {
+        int16_t *b = mtb[i / 32u];
+        int16_t ax = i ? mt[mt_idx(i - 1u)].x : mt_hx, ay = i ? mt[mt_idx(i - 1u)].y : mt_hy, bx = mt[mt_idx(i)].x, by = mt[mt_idx(i)].y;
+        int16_t lx = ax < bx ? ax : bx, hx = ax > bx ? ax : bx, ly = ay < by ? ay : by, hy = ay > by ? ay : by;
+        if (!(i & 31u))
+            b[0] = lx, b[1] = ly, b[2] = hx, b[3] = hy;
+        b[0] = lx < b[0] ? lx : b[0], b[1] = ly < b[1] ? ly : b[1], b[2] = hx > b[2] ? hx : b[2], b[3] = hy > b[3] ? hy : b[3];
+    }
+}
 static uint32_t mt_idx(uint32_t k) { return (mt_w + MT_N * 4u - 1u - k) % MT_N; }   /* k: 0 the newest */
 static void rq_add(int32_t x0, int32_t y0, int32_t x1, int32_t y1);
 static void mt_mark(uint32_t k)                    /* the piece from point k to the newer one (k 0: to the moon) */
@@ -1004,7 +1220,8 @@ static void mh_take(void)
         return;
     }
     mt_mark(0);                                    /* (the piece to the moon: where it was) */
-    if (!mt_n || MT_AGE(0) >= T / 1000u) {         /* (a new place: every frame, or every turn / 1000) */
+    if (!mt_n || (MT_AGE(0) >= T / 1000u && MT_AGE(0) >= SAMPLE_MS)) {   /* (a new place: every ~30 ms, or every
+                                                      turn / 1000) */
         if (mt_n == MT_N)
             mt_mark(--mt_n);                       /* (the oldest gives way) */
         mt[mt_w % MT_N].x = (int16_t)sc.mx16, mt[mt_w % MT_N].y = (int16_t)sc.my16, mt[mt_w % MT_N].t = (uint16_t)fm1_ms;
@@ -1024,6 +1241,7 @@ static void mh_take(void)
             mt_mark(k), mt_mark(k + 1u);
         }
     }
+    mt_boxes();
 }
 static int32_t lit_k(uint32_t t)                   /* lit: 256 while it changes, fading over 0.4 s after */
 {
@@ -1054,13 +1272,17 @@ static void field_draw(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
     }
     if (sc.om) {                                   /* the orbit in charge: a faint blue haze behind it (no square) */
         static const uint8_t HZ[3] = {40, 80, 200};
-        int32_t x, y, R2 = 108 * 108, cx = FX0 + FW / 2, cy = FY0 + FW / 2;
-        for (y = y0; y < y1; y++)
-            for (x = x0; x < x1; x++) {
-                int32_t d = (x - cx) * (x - cx) + (y - cy) * (y - cy);
-                if (d < R2)
-                    cv_add(x, y, HZ, (sc.om * 34 >> 8) * (R2 - d) / R2);
+        int32_t x, y, R2 = 108 * 108, cx = FX0 + FW / 2, cy = FY0 + FW / 2, a = sc.om * 34 >> 8, vx0, vy0, vx1, vy1;
+        cv_view(1, &vx0, &vy0, &vx1, &vy1);        /* (the strip's pixels within it: as cv_add would test them) */
+        vx0 = vx0 > x0 ? vx0 : x0, vy0 = vy0 > y0 ? vy0 : y0, vx1 = vx1 < x1 ? vx1 : x1, vy1 = vy1 < y1 ? vy1 : y1;
+        for (y = vy0; y < vy1; y++) {
+            uint16_t *row = cv_buf + ((y + cv_oy) * (int32_t)cv_w + cv_ox);
+            for (x = vx0; x < vx1; x++) {
+                int32_t d = (x - cx) * (x - cx) + (y - cy) * (y - cy), v;
+                if (d < R2 && (v = a * (R2 - d) / R2) > 0)
+                    cv_add_at(row + x, HZ, v);
             }
+        }
     }
     for (k = 0; k < FW; k += 2) {                  /* the centre cross, faint, dotted */
         if (k % 6 == 0)
@@ -1078,6 +1300,13 @@ static void field_draw(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
         const uint8_t *pc = path_lit() || sc.om > 128 ? (const uint8_t[]){120, 170, 255} : PATH;  /* a soft glow) */
         for (i = 0; i < sc.ntj; i++) {             /* the path: each point spread over its four pixels */
             int32_t ax = sc.tx[i] >> 4, ay = sc.ty[i] >> 4, fx = sc.tx[i] & 15, fy = sc.ty[i] & 15;
+            if (!(i & 31u)) {                      /* (32 points away from the strip: all skipped) */
+                const int16_t *b = sc.tjb[i / 32u];
+                if (b[2] + 2 < x0 || b[0] - 2 >= x1 || b[3] + 2 < y0 || b[1] - 2 >= y1) {
+                    i += 31u;
+                    continue;
+                }
+            }
             if (!HIT(ax, ay, 2))
                 continue;
             cv_add(ax, ay, pc, (16 - fx) * (16 - fy) * pk >> 8);
@@ -1104,6 +1333,11 @@ static void field_draw(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
         int32_t ax0 = i ? mt[mt_idx(i - 1u)].x : mt_hx, ay0 = i ? mt[mt_idx(i - 1u)].y : mt_hy, bx = mt[mt_idx(i)].x, by = mt[mt_idx(i)].y;
         int32_t dx = bx - ax0, dy = by - ay0, n, j, k = MT_K[i ? mt[mt_idx(i)].lv % 7u : 6u];
         int32_t adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+        if (!(i & 31u) && (mtb[i / 32u][0] / 16 - 2 >= x1 || mtb[i / 32u][2] / 16 + 3 <= x0 ||
+                           mtb[i / 32u][1] / 16 - 2 >= y1 || mtb[i / 32u][3] / 16 + 3 <= y0)) {
+            i += 31u;                              /* (32 pieces away from the strip: all skipped) */
+            continue;
+        }
         if (adx > 640 || ady > 640)
             continue;                              /* (a jump: no line) */
         if ((ax0 < bx ? ax0 : bx) / 16 - 2 >= x1 || (ax0 > bx ? ax0 : bx) / 16 + 3 <= x0 ||
@@ -1175,6 +1409,63 @@ static void field_draw(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
 }
 
 /* the field's rectangle (screen coordinates, clipped to it) drawn and sent, in strips the canvas holds */
+/* What the screen shows, per 8 x 8 tile of the sky: a hash of its pixels (0: not known). A drawn strip sends only its
+ * tiles that differ from the screen: per row of tiles the span from the first to the last changed one, the spans
+ * moved together in the canvas (rows of the same span: one transfer). The look is the same; the SPI carries less. */
+static uint32_t field_th[NTILE * 30u] __attribute__((section(".pool")));
+static uint32_t fstat_sent;                        /* (the host tests: the pixels the strips sent) */
+static void field_forget(void)                     /* the screen was drawn over: every tile is sent again */
+{
+    uint32_t i;
+    for (i = 0; i < NTILE * 30u; i++)
+        field_th[i] = 0;
+}
+static void field_send(int32_t x0, int32_t y0)     /* the canvas (a strip at x0 y0, tile aligned): its changed tiles */
+{
+    uint32_t w = cv_w, h = cv_h, ntx = w / TILE, tx0 = (uint32_t)(x0 - SX0) / TILE, r, o = 0, go = 0, gy = 0, gh = 0;
+    int32_t ga = -1, gb = -1;
+    for (r = 0; r < h; r += TILE) {                /* each row of tiles */
+        uint32_t bh = h - r < TILE ? h - r : TILE, ty = (uint32_t)(y0 - SY0) / TILE + r / TILE, t, j, i;
+        int32_t a = -1, b = -1;
+        for (t = 0; t < ntx; t++) {
+            typedef uint32_t __attribute__((may_alias)) word_t;
+            uint32_t hs = 0x811C9DC5u + bh, *th = &field_th[ty * 30u + tx0 + t];
+            for (j = 0; j < bh; j++) {             /* (each step one to one: a word changed always shows; mixed down) */
+                const word_t *p = (const word_t *)(const void *)(cv_buf + (r + j) * w + t * TILE);
+                for (i = 0; i < 4u; i++)
+                    hs = (hs ^ p[i]) * 0x9E3779B1u, hs ^= hs >> 15;
+            }
+            hs += !hs;
+            if (*th != hs) {
+                *th = hs;
+                if (a < 0)
+                    a = (int32_t)t;
+                b = (int32_t)t;
+            }
+        }
+        if (a < 0 || a != ga || b != gb || gy + gh != r) {   /* (a new span: the last group goes out) */
+            if (gh)
+                lcd_blit((uint32_t)(x0 + ga * TILE), (uint32_t)(y0 + (int32_t)gy), (uint32_t)(gb - ga + 1) * TILE, gh, cv_buf + go);
+            gh = 0, ga = a, gb = b, gy = r, go = o;
+        }
+        if (a < 0)
+            continue;
+        {
+            uint32_t sw = (uint32_t)(b - a + 1) * TILE;   /* (moved to o: never past where it is read from) */
+            for (j = 0; j < bh; j++, o += sw) {
+                const uint16_t *src = cv_buf + (r + j) * w + (uint32_t)a * TILE;
+                uint16_t *dst = cv_buf + o;
+                if (dst != src)
+                    for (i = 0; i < sw; i++)
+                        dst[i] = src[i];
+            }
+            gh += bh;
+            fstat_sent += sw * bh;
+        }
+    }
+    if (gh)
+        lcd_blit((uint32_t)(x0 + ga * TILE), (uint32_t)(y0 + (int32_t)gy), (uint32_t)(gb - ga + 1) * TILE, gh, cv_buf + go);
+}
 static void field_rect(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
 {
     int32_t w, h, y;
@@ -1183,14 +1474,24 @@ static void field_rect(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
     w = x1 - x0;
     if (w <= 0 || y1 <= y0)
         return;
-    h = (int32_t)(CV_MAX / (uint32_t)w);
+    h = (int32_t)(CV_HALF / (uint32_t)w);
+    if (h >= TILE)
+        h &= ~(TILE - 1);                          /* (strips of whole tile rows) */
     for (y = y0; y < y1; y += h) {
         int32_t hh = y1 - y < h ? y1 - y : h;
-        cv_begin((uint32_t)w, (uint32_t)hh, C_BG);
+        cv_begin2((uint32_t)w, (uint32_t)hh, C_BG);
         cv_ox = -x0, cv_oy = -y;
         field_draw(x0, y, x1, y + hh);
         cv_ox = cv_oy = 0;
-        cv_blit((uint32_t)x0, (uint32_t)y);
+        if ((((x0 - SX0) | (y - SY0) | w | (h & (TILE - 1))) & (TILE - 1))) {   /* (not on the tiles: all of it) */
+            int32_t tx, ty;
+            for (ty = (y - SY0) / TILE; ty <= (y + hh - 1 - SY0) / TILE; ty++)
+                for (tx = (x0 - SX0) / TILE; tx <= (x1 - 1 - SX0) / TILE; tx++)
+                    field_th[ty * 30 + tx] = 0;
+            cv_blit((uint32_t)x0, (uint32_t)y);
+            fstat_sent += (uint32_t)(w * hh);
+        } else
+            field_send(x0, y);
     }
 }
 
@@ -1253,13 +1554,17 @@ static void orbs_take(void)
     int32_t r = clamp((ost.p.sub * 160) >> 8, 0, 30000);
     const voice_t *s = vs[n].stage ? &vs[n] : 0;
     int32_t sx = fpx(s ? s->ox : syn.ox), sy = fpy(s ? s->oy : syn.oy);
-    if (sx != sc.sx || sy != sc.sy || !sc.ntr) {   /* the tail */
+    if (sx != sc.sx || sy != sc.sy || !sc.ntr) {   /* the tail: a place every ~30 ms (between: the newest moves) */
+        static uint32_t t_tail;
         uint32_t i;
-        for (i = TRAIL_N - 1u; i > 0u; i--)
-            sc.trx[i] = sc.trx[i - 1u], sc.try_[i] = sc.try_[i - 1u];
+        if (fm1_ms - t_tail >= SAMPLE_MS || !sc.ntr) {
+            t_tail = fm1_ms;
+            for (i = TRAIL_N - 1u; i > 0u; i--)
+                sc.trx[i] = sc.trx[i - 1u], sc.try_[i] = sc.try_[i - 1u];
+            if (sc.ntr < TRAIL_N)
+                sc.ntr++;
+        }
         sc.trx[0] = (int16_t)sx, sc.try_[0] = (int16_t)sy;
-        if (sc.ntr < TRAIL_N)
-            sc.ntr++;
     }
     sc.sx = (int16_t)sx, sc.sy = (int16_t)sy;
     trace_take(s ? s->oph - (freeze ? 0u : orbit_inc()) : syn.oph, s && orbit_all_adsr());
@@ -1306,7 +1611,11 @@ static void notes_take(void)
                 sc.ovc = (uint8_t)c;
         sc.ovm = (uint8_t)(1u << sc.ovc);
     }
-    if (LAYER_HELD(ui.layer) && !ui.help) {        /* a button held: its knobs in the central box */
+    if (ui.layer == L_WAVE && ui.sel && !ui.help) {   /* the WAVE set: the selected planet's bubble, not the box */
+        sc.ov = OV_WAVE, sc.ovc = (uint8_t)sel_first(), sc.ovm = (uint8_t)(1u << sc.ovc), sc.kb = 0;
+        if (kind == TK_CKNOB && ui.touch.layer == L_WAVE)
+            sc.gk = (uint8_t)(ui.touch.k + 1u);
+    } else if (LAYER_HELD(ui.layer) && !ui.help) {   /* a button held: its knobs in the central box */
         sc.cbox = CB_LAYER;
         if ((kind == TK_GKNOB || kind == TK_CKNOB) && ui.touch.layer == ui.layer)
             sc.gk = (uint8_t)(ui.touch.k + 1u);
@@ -1321,6 +1630,7 @@ static void notes_take(void)
 static uint32_t fstat_full, fstat_n, fstat_area;    /* (the host tests: how much is drawn) */
 static void field_frame(int full)
 {
+    int forget = full;                             /* (drawn anew over whatever the screen shows) */
     static uint32_t ov_drawn;
     static uint8_t prev_pulse;
     static int32_t drawn_w[NC], tw;
@@ -1359,9 +1669,14 @@ static void field_frame(int full)
             hs = sc.ov * 7u + (sc.kb ? 13u : 0u) + sc.ovc * 131u + sc.ovm * 1031u + ui.sel * 3u + 1u;
             h = hs * 17u + sc.kb;
             for (c = 0; c < NC; c++)
-                if ((sc.ovm >> c) & 1u)
+                if ((sc.ovm >> c) & 1u) {
                     for (k = 0; k < CP_N; k++)
                         h = h * 31u + (uint32_t)(uint16_t)pt.c[c][k];
+                    for (k = 0; k < 2u; k++)       /* (a wavetable read now: drawn again every half frame it moves) */
+                        if (PAT_IS_WT((uint32_t)pt.c[c][k ? CP_G2 : CP_G1] % PAT_COUNT))
+                            h = h * 31u + (uint32_t)(wt_live(c, k) >> 15);
+                }
+            h = h * 7u + sc.gk;
         }
         if (sc.cbox) {                             /* the central box: its kind, its values */
             hc = sc.cbox * 7u + ui.layer * 131u + sc.gk * 17u + sc.fader * 1000u + ui.sel * 5u + 1u;
@@ -1457,7 +1772,7 @@ static void field_frame(int full)
         int32_t d = sc.w[c] - drawn_w[c], zt = (ui.sel >> c) & 1u ? 256 : 0, zoomed = sc.zoom[c] != zt;
         int32_t turn = sc.zoom[c] && fm1_ms - t_turn[c] >= 125u;  /* (the selected one turns: ~8 frames a second) */
         int32_t anim = ui.mute_t[c] && fm1_ms - ui.mute_t[c] < MUTE_ANIM_MS + 60u;   /* (switched on / off) */
-        sc.zoom[c] += clamp(zt - sc.zoom[c], -48, 48);
+        sc.zoom[c] += clamp(zt - sc.zoom[c], -48 * (int32_t)field_dt / 30, 48 * (int32_t)field_dt / 30);   /* (~0.16 s) */
         if (turn)
             t_turn[c] = fm1_ms;
         if (d > 1600 || d < -1600 || ((drawn_sel ^ ui.sel) >> c & 1u) || ((drawn_mute ^ mute) >> c & 1u) ||
@@ -1474,7 +1789,9 @@ static void field_frame(int full)
         }
     }
     drawn_sel = ui.sel, drawn_mute = mute, prev_pulse = sc.pulse;
-    for (i = 0; i < 5u; i++) {                     /* a few stars twinkle */
+    static uint32_t tw_acc;
+    tw_acc += 5u * field_dt;
+    for (i = tw_acc / 30u, tw_acc %= 30u; i > 0u; i--) {   /* a few stars twinkle (5 a 30 ms) */
         int32_t x, y;
         star_xy((uint32_t)(tw++ % NSTAR), &x, &y);
         rq_add(x - 1, y - 1, x + 2, y + 2);
@@ -1483,21 +1800,26 @@ static void field_frame(int full)
         for (c = tiles[ty]; c; c &= c - 1u)
             area += TILE * TILE;
     fstat_area += area, fstat_n++;
+    if (forget)
+        field_forget();
     if (full || area > (SX1 - SX0) * (SY1 - SY0) * 7u / 10u) {
         fstat_full++;
         field_rect(SX0, SY0, SX1, SY1);
         return;
     }
-    for (ty = 0; ty < NTILE; ty++) {               /* a row's runs of marked tiles: one rectangle each */
-        uint32_t m = tiles[ty], tx = 0;
-        while (m) {
-            uint32_t t1;
-            while (!((m >> tx) & 1u))
+    for (ty = 0; ty < NTILE; ty++) {               /* a row's runs of marked tiles, each carried down the rows */
+        uint32_t tx = 0;                           /* below that have it too: one rectangle each */
+        while (tiles[ty]) {
+            uint32_t t1, run, ty1 = ty + 1u;
+            while (!((tiles[ty] >> tx) & 1u))
                 tx++;
-            for (t1 = tx; (m >> t1) & 1u; t1++)
+            for (t1 = tx; t1 < 32u && (tiles[ty] >> t1) & 1u; t1++)
                 ;
-            field_rect(SX0 + (int32_t)tx * TILE, SY0 + (int32_t)ty * TILE, SX0 + (int32_t)t1 * TILE, SY0 + ((int32_t)ty + 1) * TILE);
-            m &= ~(((1u << t1) - 1u) & ~((1u << tx) - 1u));
+            run = (t1 >= 32u ? 0xFFFFFFFFu : (1u << t1) - 1u) & ~((1u << tx) - 1u);
+            while (ty1 < NTILE && (tiles[ty1] & run) == run)
+                tiles[ty1++] &= ~run;
+            tiles[ty] &= ~run;
+            field_rect(SX0 + (int32_t)tx * TILE, SY0 + (int32_t)ty * TILE, SX0 + (int32_t)t1 * TILE, SY0 + (int32_t)ty1 * TILE);
             tx = t1;
         }
     }
@@ -1540,8 +1862,13 @@ static void level_meter(int32_t x, int32_t y)      /* the output level (into the
         cv_rect(x + k, y, 2, 6, k < l ? (k > w - 7 ? RGB(255, 60, 60) : k > w - 13 ? RGB(255, 200, 60) : RGB(80, 200, 255))
                                       : RGB(16, 20, 40));
 }
+#if BOARD_SMK37
 static const char *const BTN_NAME[FM1_NBTN] = {"KNOB BANK", "FADER BANK", "<", ">", "OCT-", "OCT+", "ARP", "REPEAT",
                                                "SCALE", "CHORD", "GLOBE", "BT", "PATCH", "PARA", "FX", "SEQ", "PLAY", "REC"};
+#else
+static const char *const BTN_NAME[FM1_NBTN] = {"OCT-", "OCT+", "FX", "SEL", "ENV", "LFO", "EDIT", "GLO", "HOME", "SAVE",
+                                               "ARP", "SEQ", "PLAY", "REC"};
+#endif
 /* what the control touched does now; else the sound, the voice mode and the level */
 static void top_line(int force)
 {
@@ -1551,10 +1878,16 @@ static void top_line(int force)
     uint16_t col = RGB(255, 255, 255);
     if (ui.help)
         str_cpy(b, "GUIDE  K1 SCROLLS", sizeof b), col = RGB(120, 170, 255);
+    else if (ui.list && (int32_t)(ui.msg_until - fm1_ms) <= 0)
+        str_cpy(b, ui.lbank == BK_USER ? "USER  < > K1 BANK  K2 NEXT" : ui.lbank == BK_F2 ? "FACTORY 2 < > K1 BANK K2 NEXT"
+                   : "FACTORY  < > K1 BANK  K2 NEXT", sizeof b),
+            col = ui.lbank == BK_USER ? RGB(80, 200, 255) : ui.lbank == BK_F2 ? RGB(255, 120, 200) : RGB(255, 200, 90);
     else if (LAYER_HELD(ui.layer)) {
-        str_cpy(b, "HOLD ", sizeof b);
-        str_cat(b, BTN_NAME[LAYERS[ui.layer].btn], sizeof b);
-        str_cat(b, ": ", sizeof b);
+        b[0] = 0;
+        if (LAYERS[ui.layer].btn < FM1_NBTN) {     /* (the FM-1's WAVE set: page 4, no button) */
+            str_cat(b, BTN_NAME[LAYERS[ui.layer].btn], sizeof b);
+            str_cat(b, ": ", sizeof b);
+        }
         str_cat(b, LAYERS[ui.layer].name, sizeof b);
         str_cat(b, " KNOBS", sizeof b);
         col = RGB(150, 190, 255);
@@ -1562,9 +1895,7 @@ static void top_line(int force)
         str_cpy(b, ui.msg, sizeof b);
     else {
         idle = 1;
-        fmt_int(b, ui.preset + 1);
-        str_cat(b, " ", sizeof b);
-        str_cat(b, PRESET_NAME[ui.preset], sizeof b);
+        preset_label(b, sizeof b);                 /* (saved: marked *) */
         col = RGB(210, 220, 255);
     }
     for (i = 0; b[i]; i++)
@@ -1779,10 +2110,10 @@ static void manual_content(void)
     }
     man_head(1018, "BUTTONS");
     {
-        static const char *const B[] = {"< > SOUND    OCT- + OCTAVE", "SEQ FREEZE", "CHORD VOICES, HELD: VOICE",
-                                        "FX HELD: MIXER", "FADER BANK HELD: MORE", "ARP ON, HELD: ARP KNOBS",
-                                        "GLOBE FOCUS   PARA RANDOM", "PARA HELD: UNDO", "REC LATCH   PLAY TAP BPM",
-                                        "REPEAT RESTART", "F3 SPEED: THE SUN, IN BEATS", "MOD WHEEL: THE MOON'S SPEED", "PATCH ALL NOTES OFF"};
+        static const char *const B[] = {"< > SOUND    OCT- + OCTAVE", "SEQ FREEZE", "CHORD: VOICE KNOBS (TAP)",
+                                        "FX: MIXER KNOBS (TAP)", "FADER BANK: MORE KNOBS", "ARP: ARP KNOBS (TAP)",
+                                        "GLOBE FOCUS 1-4 CENTRE OFF", "PARA RANDOM, HELD: UNDO", "REC LATCH   PLAY TAP BPM",
+                                        "REPEAT RESTART", "F3 SPEED: THE SUN, IN BEATS", "MOD WHEEL: THE MOON'S SPEED", "PATCH SOUNDS  TWICE: ALL OFF"};
         for (i = 0; i < (int32_t)(sizeof B / sizeof B[0]); i++)
             man_text(1040 + i * 15, B[i]);
     }
@@ -1799,23 +2130,78 @@ static void draw_manual(void)                      /* the guide, from ui.mscroll
     }
 }
 
+/* ------------------------------------------------------------- the sound list --- */
+/* PATCH: the bank shown (FACTORY, USER, FACTORY 2), its sixteen slots as the pads lie: the left column the top row (1-8), the
+ * right column the bottom row (9-16); the sound now marked, a pad held lit, empty USER slots dim */
+static uint32_t list_hash(void)
+{
+    uint32_t h = 0x811C9DC5u, i;
+    h = (h ^ ui.lbank) * 16777619u, h = (h ^ ui.bank) * 16777619u, h = (h ^ ui.preset) * 16777619u;
+    h = (h ^ usr.h.mask) * 16777619u, h = (h ^ ui.lpad) * 16777619u;
+    for (i = 0; i < USR_SLOTS; i++)
+        h = (h ^ usr.src[i]) * 16777619u;
+    return h;
+}
+static void list_content(void)
+{
+    uint32_t i, user = ui.lbank == BK_USER, first = bank_first(ui.lbank);
+    uint16_t bc = user ? RGB(80, 200, 255) : ui.lbank == BK_F2 ? RGB(255, 120, 200) : RGB(255, 200, 90);
+    text_c(120, 0, &FONT_L, user ? "USER" : ui.lbank == BK_F2 ? "FACTORY 2" : "FACTORY", bc);
+    cv_text(4, 34, &FONT_S, "TOP PADS", RGB(110, 120, 160));
+    cv_text(124, 34, &FONT_S, "BOTTOM PADS", RGB(110, 120, 160));
+    for (i = 0; i < NPRESET; i++) {
+        char nb[4];
+        int32_t x = i < 8u ? 0 : 120, y = 52 + (int32_t)(i % 8u) * 19;
+        int cur = ui.lbank == ui.bank && i == ui.preset, held = (ui.lpad >> i) & 1u, empty = user && !usr_has(i);
+        const char *name = empty ? "EMPTY" : PRESET_SHORT[user ? usr.src[i] % NFACT : first + i];
+        if (cur || held)
+            cv_rect(x + 1, y - 1, 118, 18, held ? RGB(70, 40, 20) : RGB(30, 40, 80));
+        fmt_int(nb, first + i + 1);
+        cv_text(x + 2 + (first + i + 1 < 10u ? 8 : 0), y, &FONT_S, nb, cur ? C_WHITE : RGB(110, 120, 160));   /* (right-aligned) */
+        cv_text(x + 26, y, &FONT_S, name, cur ? C_WHITE : empty ? RGB(70, 75, 100) : RGB(200, 205, 230));
+    }
+    text_c(120, 206, &FONT_S, "TAP: PLAY  HOLD: SAVE IN USER", RGB(170, 175, 200));
+}
+static void draw_list(void)
+{
+    uint32_t s;
+    for (s = 0; s < 2u; s++) {
+        cv_begin(240, 111, C_BG);
+        cv_oy = -((int32_t)s * 111);
+        list_content();
+        cv_oy = 0;
+        cv_blit(0, 18u + s * 111u);
+    }
+}
+
 /* ------------------------------------------------------------- the frame --- */
 static uint8_t boot_handover;                      /* (the boot's last frame on the screen: below) */
 static void draw_frame(void)
 {
     static uint32_t t_field;
-    static uint8_t shown_help = 2;
+    static uint8_t shown_help = 0xFF;
     static int16_t shown_scroll = -1;
-    uint32_t now = fm1_ms;
+    static uint32_t shown_list;
+    uint32_t now = fm1_ms, over = ui.help ? 1u : ui.list ? 2u : 0u;   /* the guide, the sound list or the orbit */
     int force = 0;
-    if (ui.help != shown_help) {                   /* in or out of the guide: all anew */
-        if (shown_help != 2u || !boot_handover)    /* (after the boot: drawn over its last frame, no blank) */
+    if (over != shown_help) {                      /* in or out of the guide or the list: all anew */
+        if (shown_help != 0xFFu || !boot_handover) /* (after the boot: drawn over its last frame, no blank) */
             lcd_fill(0, 0, 240, 240, C_BG);
-        shown_help = ui.help;
+        shown_help = (uint8_t)over;
         shown_scroll = -1;
+        shown_list = 0;
         force = 1;
     }
     top_line(force);
+    if (over == 2u) {
+        uint32_t h = list_hash() | 1u;
+        if (h != shown_list) {
+            shown_list = h;
+            draw_list();
+        }
+        ui.dirty = 0;
+        return;
+    }
     if (ui.help) {
         if (ui.mscroll != shown_scroll) {
             shown_scroll = ui.mscroll;
@@ -1823,7 +2209,8 @@ static void draw_frame(void)
         }
         return;
     }
-    if (force || now - t_field >= 28u) {           /* the field: ~30 frames a second */
+    if (force || now - t_field >= UI_FIELD_MS) {   /* the field: up to ~60 frames a second */
+        field_dt = force ? 30u : (uint32_t)clamp((int32_t)(now - t_field), 1, 60);   /* (anew: as a frame of old) */
         t_field = now;
         field_frame(force);
     }
@@ -1977,7 +2364,7 @@ static void boot_anim(void)
     for (;;) {
         uint32_t t = fm1_ms - t0;
         fm1_wdt_feed();
-        if (t > BOOT_MS || (fm1_in.keys && t > 300u))
+        if (t > BOOT_MS || (PANEL_KEYS() && t > 300u))
             break;
         boot_frame(t);                             /* (as fast as it goes: the places follow the time) */
     }

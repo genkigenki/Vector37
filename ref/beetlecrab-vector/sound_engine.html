@@ -1,0 +1,792 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sound engine &mdash; Vector Operator&#39;s Manual</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/vector.css?v=60349a46" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=4348de45"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Configuration" href="configuration.html" />
+    <link rel="prev" title="Overview" href="overview.html" />
+    <!-- Matomo -->
+    <script>
+      var _paq = window._paq = window._paq || [];
+      /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+      _paq.push(['trackPageView']);
+      _paq.push(['enableLinkTracking']);
+      (function() {
+        var u="https://stats.beetlecrab.audio/";
+        _paq.push(['setTrackerUrl', u+'matomo.php']);
+        _paq.push(['setSiteId', '2']);
+        var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+        g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+      })();
+    </script>
+    <!-- End Matomo Code -->
+
+     
+
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html">
+            
+              <img src="_static/logo_white.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick start guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="overview.html">Overview</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Sound engine</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#orbiter">Orbiter</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#corners">Corners</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#warp">Warp</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#synthesis">Synthesis</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#overtone-generators">Overtone Generators</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#overtone-blend">Overtone Blend</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#additive-mode">Additive mode</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#modulated-mode">Modulated mode</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#corner-matrix">Corner Matrix</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#filters">Filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#generators">Generators</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#randomizer">Randomizer</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#polyphony">Polyphony</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#poly-mode">Poly Mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dual-mode">Dual Mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#mono-mode">Mono Mode</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#arpeggiator">Arpeggiator</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#step-grid">Step Grid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#randomization">Randomization</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#effects">Effects</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#vibrato-and-tremolo">Vibrato and Tremolo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#drive">Drive</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#chorus">Chorus</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#delay">Delay</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#reverb">Reverb</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="specs.html">Specifications</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="genindex.html">Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Vector</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Sound engine</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="sound-engine">
+<h1>Sound engine<a class="headerlink" href="#sound-engine" title="Link to this heading"></a></h1>
+<section id="orbiter">
+<h2>Orbiter<a class="headerlink" href="#orbiter" title="Link to this heading"></a></h2>
+<p id="index-0">Orbiter is at the heart of Vector. Each <strong>Corner</strong> <code class="docutils literal notranslate"><span class="pre">(6)</span></code> of the universe,
+or rather, the two-dimensional space <code class="docutils literal notranslate"><span class="pre">(1)</span></code>, is formed by two
+<a class="reference internal" href="#overtone-generators">Overtone Generators</a>, <a class="reference internal" href="#overtone-blend">Overtone Blend</a>, and a filter.</p>
+<p>The space also contains two orbs, blue <code class="docutils literal notranslate"><span class="pre">(4)</span></code> and green <code class="docutils literal notranslate"><span class="pre">(5)</span></code>.
+The blue orb follows a given trajectory within the two-dimensional space, which
+is determined by <a class="reference internal" href="#warp">Warp</a>.
+The green orb orbits around the blue orb in a circular motion. This motion is
+referred to as Suborbit and its speed can be synchronized to the main
+<a class="reference internal" href="configuration.html#tempo"><span class="std std-ref">Tempo</span></a>.
+<strong>Suborbit Size</strong> and <strong>Suborbit Speed</strong> can be controlled by dedicated knobs.
+The whole mechanism is called the Orbiter.</p>
+<figure class="align-center align-default">
+<img alt="_images/orbiter.png" src="_images/orbiter.png" style="height: 20em;" />
+</figure>
+<p>When a note is triggered, all four Corners play simultaneously and the final mix
+point of their outputs is determined by the green orb’s position.</p>
+<p id="index-1">The centre point <code class="docutils literal notranslate"><span class="pre">(2)</span></code> as well as the rotation and size of the Orbiter trajectory
+can be set from the touchscreen interface.
+When <strong>Retrigger</strong> <img alt="retrigger" src="_images/retrigger.png" style="height: 0.5em;" /> is enabled, the Orbiter motion always starts from
+the beginning of the shape – its zero phase <code class="docutils literal notranslate"><span class="pre">(3)</span></code> – on note input or after each
+cycle of the <a class="reference internal" href="#arpeggiator">Arpeggiator</a> sequence. Note that the zero phase can be changed by
+<a class="reference internal" href="#warp">Warp</a>.</p>
+<div class="admonition-hints admonition">
+<p class="admonition-title">Hints</p>
+<ul class="simple">
+<li><p>To control the movement of the Orbiter manually, press the
+<a class="reference internal" href="overview.html#focus"><span class="std std-ref">Focus</span></a> button once to stop the Orbiter movement along the
+warped trajectory.</p></li>
+<li><p>The centre point of the Orbiter can be also controlled by MIDI Control
+Change (CC) messages.</p></li>
+<li><p>If your MIDI controller supports aftertouch or MPE, try <a class="reference internal" href="configuration.html#routing"><span class="std std-ref">Routing</span></a> it
+to Suborbit Speed.</p></li>
+</ul>
+</div>
+<section id="corners">
+<h3>Corners<a class="headerlink" href="#corners" title="Link to this heading"></a></h3>
+<p id="corner"><span id="index-2"></span>Corners are the origin of sound synthesis in Vector.</p>
+<p>Each of the four Corners consists of two <strong>Overtone Generators</strong> with six
+specific overtone patterns. The two generators are combined by the <strong>Blend</strong>
+element – additive in the first half (G1+G2), modulated in the
+second (G1×G2).
+In addition, each of the Corners has an associated filter which can be placed
+after Generator, Blend or Mix in the <a class="reference internal" href="#corner-matrix">Corner Matrix</a>.</p>
+<p>All four Corners play at the same time and the resulting <strong>Mix</strong> is modulated by
+the position of the <a class="reference internal" href="#orbiter">Orbiter</a>.</p>
+<figure class="align-center align-default">
+<img alt="_images/corner_blocks.png" src="_images/corner_blocks.png" style="width: 80%;" />
+</figure>
+<p id="index-3">Each Corner is controlled by five parameters (<strong>Overtone Gen 1 and 2</strong>,
+<strong>Overtone Blend</strong>, <strong>Filter Cutoff</strong> and <strong>Filter Resonance</strong>) which are
+assigned to the five knobs just below the display. These knobs increase or
+decrease values of the selected Corners’ parameters.</p>
+<p id="index-4">The individual filters’ resonances are limited by the <strong>Global Resonance</strong> knob.</p>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>The selection of Corners under editing can be changed in the
+<a class="reference internal" href="#corner-matrix">Corner Matrix</a>.</p>
+</div>
+</section>
+<section id="warp">
+<h3>Warp<a class="headerlink" href="#warp" title="Link to this heading"></a></h3>
+<p id="index-5">The Orbiter trajectory is defined by a warped shape. There are six basic
+shapes selectable on the <strong>Orbiter screen</strong> <img alt="screen_orbiter" src="_images/home.png" style="height: 0.8em;" />:</p>
+<ul class="simple">
+<li><p><strong>ADSR shape</strong> <img alt="warp_adsr" src="_images/warp_adsr.png" style="height: 0.8em;" />,</p></li>
+<li><p>Three <strong>Lissajous shapes</strong> <img alt="warp_lis1" src="_images/warp_lis1.png" style="height: 0.8em;" /> <img alt="warp_lis2" src="_images/warp_lis2.png" style="height: 0.8em;" /> <img alt="warp_lis3" src="_images/warp_lis3.png" style="height: 0.8em;" />
+with increasing complexity,</p></li>
+<li><p><strong>N-gon shape</strong> <img alt="warp_ngon" src="_images/warp_ngon.png" style="height: 0.8em;" />, and</p></li>
+<li><p><strong>Pulse shape</strong> <img alt="warp_pwm" src="_images/warp_pwm.png" style="height: 0.8em;" />.</p></li>
+</ul>
+<p>These basic shapes can be distorted by dragging the rectangular <strong>Warp Pad</strong>
+(just below the shape selector) horizontally and vertically, or by
+dragging two separate sliders (for N-gon and Pulse shapes)
+in the same area.</p>
+<p>The Lissajous, N-gon and Pulse shapes are always periodic and
+their speed can be set relatively (8 to 1/32) to the main <a class="reference internal" href="configuration.html#tempo"><span class="std std-ref">Tempo</span></a> using one
+of the speed selectors below the Warp Pad. Moreover, the resulting trajectory
+can be resized, moved or rotated by dragging it on the Orbiter screen.</p>
+<p id="adsr-shape">When the ADSR shape is selected, the Orbiter follows a figure in which each
+stage of the envelope covers a different segment of the 2D space. The segments
+can be warped individually based on the segment selectors below the Warp Pad
+(A-D, D-S, S-R), while their endpoints can be moved on the Orbiter screen to
+form the desired trajectory. It is possible to use the same ADSR envelope for
+both amplitude and Orbiter or to have two independent sets of values
+depending on the selected configuration. See the <a class="reference internal" href="overview.html#envelope"><span class="std std-ref">Envelope</span></a> section for
+more details.</p>
+<p>The initial orbiter shape and position can be restored using the
+<strong>Warp Reset</strong> <img alt="warp_reset" src="_images/warpReset.png" style="height: 0.8em;" /> button.</p>
+<p>The pictures below shows examples of warped Lissajous <img alt="warp_lis1" src="_images/warp_lis1.png" style="height: 0.8em;" />, ADSR
+<img alt="warp_adsr" src="_images/warp_adsr.png" style="height: 0.8em;" />, N-gon <img alt="warp_ngon" src="_images/warp_ngon.png" style="height: 0.8em;" /> and Pulse <img alt="warp_pwm" src="_images/warp_pwm.png" style="height: 0.8em;" /> shapes.</p>
+<figure class="align-center align-default">
+<img alt="_images/warp.png" src="_images/warp.png" style="width: 100%;" />
+</figure>
+<figure class="align-center align-default">
+<img alt="_images/warp2.png" src="_images/warp2.png" style="width: 100%;" />
+</figure>
+</section>
+</section>
+<section id="synthesis">
+<h2>Synthesis<a class="headerlink" href="#synthesis" title="Link to this heading"></a></h2>
+<section id="overtone-generators">
+<h3>Overtone Generators<a class="headerlink" href="#overtone-generators" title="Link to this heading"></a></h3>
+<p id="index-6">The <strong>Overtone Generators</strong> produce overtones (harmonics) in seven specific
+patterns.
+The first six patterns A-F are described in the table below while the seventh
+pattern, N, generates random noise.
+For a familiar mental model, It might be useful to think of the overtone
+patterns in a similar way as you would think of accordion or organ registers.</p>
+<figure class="align-center align-default">
+<img alt="_images/generators.png" src="_images/generators.png" style="width: 100%;" />
+</figure>
+<p>Patterns A–C include even overtones while patterns D–F include odd overtones
+(note that the 1st overtone, the fundamental, is always implied unless turned
+off in the <a class="reference internal" href="#prime-slot">Prime Slot</a> tab of the <a class="reference internal" href="#corner-matrix">Corner Matrix</a>).
+Some overtones are present with positive and other with negative amplitudes,
+making it possible to subtract overtones when blending two patterns together.</p>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>The blend of patterns C and D produces a sawtooth waveform.</p>
+</div>
+<p>The amplitudes of the overtones decrease such that the amplitude of the
+n-th overtone is either 1/n or -1/n, depending on the sign
+in the table.</p>
+<p>The <strong>Noisy overtones</strong> pattern (N) generates random noisy content above the
+fundamental frequency played.
+It is based on a pink noise (1/f) generator with a resonant high pass filter
+tuned to the fundamental and can be used on its own or employed as a modulator
+or carrier in the all <a class="reference internal" href="#blend">blend</a> modes.</p>
+</section>
+<section id="overtone-blend">
+<span id="blend"></span><span id="index-7"></span><h3>Overtone Blend<a class="headerlink" href="#overtone-blend" title="Link to this heading"></a></h3>
+<p>The Overtone Generators 1 and 2 can be blended together using the
+<strong>Overtone Blend</strong> knob. When the knob is in the centre position, the resulting
+set of overtones equals to Generator 1 (while Generator 2 is ignored).</p>
+<p>Outside of the centre position, Blend operates in two different modes:
+<strong>Additive</strong> in the left and <strong>Modulated</strong> in the right half of the range.</p>
+<section id="additive-mode">
+<h4>Additive mode<a class="headerlink" href="#additive-mode" title="Link to this heading"></a></h4>
+<p>When moving the knob to the left from the centre, the two generators
+are blended <strong>additively</strong> and the Overtone Blend knob determines the amount
+of Generator 2 overtones added to or subtracted from the overtones
+produced by Generator 1 (depending on the +/- signs in the
+<a class="reference internal" href="#overtone-generators">Overtone Generators</a> table), with the leftmost position corresponding to
+G1+G2.</p>
+<figure class="align-center align-default">
+<img alt="_images/blend_add.png" class="blend" src="_images/blend_add.png" style="height: 10em;" />
+</figure>
+</section>
+<section id="modulated-mode">
+<h4>Modulated mode<a class="headerlink" href="#modulated-mode" title="Link to this heading"></a></h4>
+<p id="index-8">When turning the knob to the right from the centre, the two
+generators are <strong>modulated</strong> (marked as G1×G2). Five different modulations are
+available in the <a class="reference internal" href="#blend-mode">Blend Mode</a> tab of the <a class="reference internal" href="#corner-matrix">Corner Matrix</a> for each
+<strong>Overtone Blend</strong>:</p>
+<ul class="simple">
+<li><p>Amplitude modulation (AM),</p></li>
+<li><p>Phase modulation (PM),</p></li>
+<li><p>Combination of both (PM+AM),</p></li>
+<li><p>Phase distortion and amplitude modulation (PD+AM), and</p></li>
+<li><p>Reversed PD+AM (rPD+AM).</p></li>
+</ul>
+<p id="index-9">In the <strong>Amplitude modulation</strong> mode, Generator 1 and Generator 2 are
+amplitude cross-modulated at the audio rate.</p>
+<figure class="align-center align-default">
+<img alt="_images/blend_am.png" class="blend" src="_images/blend_am.png" style="height: 10em;" />
+</figure>
+<p id="index-10">In the <strong>Phase modulation</strong> mode, Generator 1 is a carrier and
+Generator 2 is a modulator while the Overtone Blend knob determines the
+amount of the modulation.</p>
+<figure class="align-center align-default">
+<img alt="_images/blend_fm.png" class="blend" src="_images/blend_fm.png" style="height: 10em;" />
+</figure>
+<p id="index-11">In the <strong>Combined PM+AM modulation</strong> mode,  Generator 2
+frequency-modulates Generator 1, and then the result is audio-rate amplitude
+cross-modulated between the frequency-modulated Generator 1 and the original
+Generator 2.</p>
+<figure class="align-center align-default">
+<img alt="_images/blend_fmam.png" class="blend" src="_images/blend_fmam.png" style="height: 10em;" />
+</figure>
+<p id="index-12">Finally, the <strong>Phase distortion followed by amplitude modulation</strong> mode
+applies a non-linear phase curve on Generator 2, which results in a
+time-domain “squeeze” of the waveform. The result is then cross-modulated
+using audio-rate amplitude modulation.</p>
+<figure class="align-center align-default">
+<img alt="_images/blend_pdam.png" class="blend" src="_images/blend_pdam.png" style="height: 10em;" />
+</figure>
+<p id="index-13">The <strong>PD+AM</strong> mode is complemented by a <strong>reversed PD+AM</strong> (or <strong>rPD+AM</strong>)
+mode with a reversed phase curve.</p>
+<figure class="align-center align-default">
+<img alt="_images/blend_rpdam.png" class="blend" src="_images/blend_rpdam.png" style="height: 10em;" />
+</figure>
+</section>
+</section>
+<section id="corner-matrix">
+<h3>Corner Matrix<a class="headerlink" href="#corner-matrix" title="Link to this heading"></a></h3>
+<p id="index-14">The Corner Matrix is accessible on the <strong>Orbiter screen</strong> <img alt="screen_orbiter" src="_images/home.png" style="height: 0.8em;" />
+through the <strong>Corner Matrix</strong> button and allows for</p>
+<ol class="arabic simple">
+<li><p>selection of the <a class="reference internal" href="#corners">Corners</a> under editing (with <strong>Single</strong> or <strong>Multi</strong>
+selection possible),</p></li>
+<li><p>configuration of the <a class="reference internal" href="#randomizer">Randomizer</a> (<strong>Corners</strong>, <strong>Matrix</strong> or <strong>Both</strong>
+and <strong>Selected</strong> or <strong>All Four</strong>),</p></li>
+<li><p>versatile configuration of four independent filters (each filter can be
+placed to any point in the synthesis engine pipeline or bypassed), available
+in the <a class="reference internal" href="#filters">Filters</a> section,</p></li>
+<li><p>configuration of the fundamental frequency (prime) slot, available in the
+<a class="reference internal" href="#generators">Generators</a> section,</p></li>
+<li><p>selection of the modulation (G1×G2) mode for each <a class="reference internal" href="#overtone-blend">Overtone Blend</a>,
+available in the <a class="reference internal" href="#generators">Generators</a> section, and</p></li>
+<li><p>individual detuning of all <a class="reference internal" href="#overtone-generators">Overtone Generators</a>, also available in the
+<a class="reference internal" href="#generators">Generators</a> section.</p></li>
+</ol>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>The behaviour of the Corner Matrix button can be configured in
+<a class="reference internal" href="configuration.html#global-settings"><span class="std std-ref">Global settings</span></a>.</p>
+</div>
+<section id="filters">
+<h4>Filters<a class="headerlink" href="#filters" title="Link to this heading"></a></h4>
+<p id="index-15">The <strong>Filter Matrix</strong> allows for configuration of four independent filters.
+The picture below shows the Corner Matrix interface with four tabs representing
+each filter and four rows corresponding to each Corner.</p>
+<figure class="align-center align-default">
+<img alt="_images/filter_matrix.png" src="_images/filter_matrix.png" style="width: 80%;" />
+</figure>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>Notice the signal flow of the corners pipeline: the signal is
+cascading down in such a way, that if a filter is placed on the Mix
+element, that filter will process the sum of all previous corners’
+outputs.</p>
+</div>
+<p><strong>To select Corners for editing</strong>, tap one or more of the buttons
+(labeled 1 to 4) in the first column. The selected Corners can then be
+controlled by the five Corner parameters knobs just below the display.</p>
+<p><strong>To slot a filter</strong>, select one of the four filters on the tabs
+(labeled Filter 1 to Filter 4) and then tap one of the elements in the
+Corner Matrix. The filter is then placed between the selected element’s output
+and the next element’s input, as an insert.</p>
+<p>In this particular example, Filter 1 is currently under editing and it is
+configured as a high-pass filter tracking the fundamental frequency of played
+notes.
+Filter 2 is placed after Blend of Corner 2,
+Filter 3 is placed after Generator 2 of Corner 3 and
+Filter 4 is placed after Generator 1 of Corner 4 – the number of
+the filter is always indicated by one of the four icons for convenience.
+Two Corners 1 and 2 are selected, which means their values are changed by
+the five knobs just below the display.</p>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>It is possible to cycle through the selected Corners/Filters by
+entering the <a class="reference internal" href="overview.html#focus"><span class="std std-ref">Focus</span></a> mode (this temporarily bypasses the
+<strong>Single</strong> or <strong>Multi</strong> selection).</p>
+</div>
+<section id="filter-types">
+<h5>Filter types<a class="headerlink" href="#filter-types" title="Link to this heading"></a></h5>
+<p id="index-16">Five different filter types are available:</p>
+<ul class="simple">
+<li><p><img alt="hpf" src="_images/filter_hp.png" style="height: 0.6em;" /> <strong>12 dB/oct High-pass</strong> filter passes frequencies above <strong>Filter Cutoff</strong>
+(and attenuates frequencies below the cut-off frequency).</p></li>
+<li><p><img alt="lpf" src="_images/filter_lp.png" style="height: 0.6em;" /> <strong>12 dB/oct Low-pass</strong> and <img alt="lpf24" src="_images/filter_lp24.png" style="height: 0.6em;" /> <strong>24 dB/oct Low-pass</strong> filters pass
+frequencies below Filter Cutoff.</p></li>
+<li><p><img alt="bpf" src="_images/filter_bp.png" style="height: 0.6em;" /> <strong>12 dB/oct Band-pass</strong> filter passes frequencies inside a band with its
+centre frequency defined by Filter Cutoff.</p></li>
+<li><p><img alt="formant" src="_images/filter_formant.png" style="height: 0.6em;" /> <strong>Formant</strong> filter boosts or attenuates frequencies selectively as
+to emulate the resonance of different vowels.
+The Filter Cutoff parameter aligns the filter with the U-E-O-I-A vowels,
+while Filter Resonance controls the filter’s amount.</p></li>
+</ul>
+<p id="index-17">A filter can be configured to either <strong>Track</strong> the played notes
+(so the cut-off frequency is relative to the fundamental frequency of the note)
+or interpret the cut-off frequency as an absolute value.</p>
+<p id="index-18">If a filter is <strong>Static</strong>, it is assigned to one specific Corner of the
+<a class="reference internal" href="#orbiter">Orbiter</a> (Filter 1 to Corner 1 etc.), which means its properties are
+always controlled by the specific Corner’s parameter no matter where in the
+<a class="reference internal" href="#corner-matrix">Corner Matrix</a> it is placed. Otherwise the parameters <strong>Filter Cutoff</strong> and
+<strong>Filter Resonance</strong> are modulated by the current Orbiter’s position,
+as shown by the top-most bar of the Resonance and Cutoff indicators at the
+bottom of the screen.</p>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>By stacking filters on top of each other, they will be processed
+serially. Filters of the same type and tuning will effectively
+increase their total cutoff to up to 48 dB/oct,
+but beware of out of
+control resonances in such scenarios.</p>
+</div>
+</section>
+</section>
+<section id="generators">
+<h4>Generators<a class="headerlink" href="#generators" title="Link to this heading"></a></h4>
+<p id="index-19">The <strong>Generators</strong> section of the <a class="reference internal" href="#corner-matrix">Corner Matrix</a> allows of the individual
+<a class="reference internal" href="#overtone-generators">Overtone Generators</a> (two per each corner).</p>
+<section id="prime-slot">
+<h5>Prime Slot<a class="headerlink" href="#prime-slot" title="Link to this heading"></a></h5>
+<p id="index-20">The <strong>Prime Slot</strong> tab determines where in the signal chain the fundamental
+frequency is added.</p>
+<p>In this particular example, the fundamental of Corners 1 and 2 is added to
+the final mix of the corners, the fundamental of Corner 3 is added to the
+output of its Generator 2 and the fundamental of Corner 4 is not
+utilised (Off):</p>
+<figure class="align-center align-default">
+<img alt="_images/prime_slot.png" src="_images/prime_slot.png" style="width: 80%;" />
+</figure>
+</section>
+<section id="gen-tune">
+<h5>Gen Tune<a class="headerlink" href="#gen-tune" title="Link to this heading"></a></h5>
+<p id="index-21">The <strong>Gen 1 Tune</strong> and <strong>Gen 2 Tune</strong> tabs allow for individual detuning of
+all <a class="reference internal" href="#overtone-generators">Overtone Generators</a> by a fixed ratio (before the <a class="reference internal" href="#blend">Blend</a> modulation).
+However, the fundamental frequency remains unchanged.</p>
+<p>The fixed ratios 1/2, 1/3, 1/4, and 1/5 correspond to one octave down,
+one octave and a fifth down, two octaves down,
+and two octaves and a major third down, respectively.</p>
+<p>In this particular example, Generator 1 of Corner 2 is detuned to
+one third of the fundamental frequency while others are unchanged (1×):</p>
+<figure class="align-center align-default">
+<img alt="_images/gen_tune.png" src="_images/gen_tune.png" style="width: 80%;" />
+</figure>
+</section>
+<section id="blend-mode">
+<h5>Blend Mode<a class="headerlink" href="#blend-mode" title="Link to this heading"></a></h5>
+<p id="index-22">The <strong>Blend Mode</strong> tab allows for selection of one of the five
+modulation (G1×G2) modes modes for each corner. The individual modes are
+described in the <a class="reference internal" href="#overtone-blend">Overtone Blend</a> section.</p>
+<p>In this particular example, all corners are using the combined PM+AM mode:</p>
+<figure class="align-center align-default">
+<img alt="_images/blend_mode.png" src="_images/blend_mode.png" style="width: 80%;" />
+</figure>
+</section>
+<section id="amp">
+<h5>Amp<a class="headerlink" href="#amp" title="Link to this heading"></a></h5>
+<p id="index-23">Finally, the <strong>Amp</strong> tab allows for individual volume configuration of each
+corner with an optional per-corner limiter.</p>
+<p>In this particular example, corners 1, 3 and 4 are set to the maximum volume,
+while the volume of corner 2 is lower.
+Corners 1 and 2 have the limiter enabled.</p>
+<figure class="align-center align-default">
+<img alt="_images/amp.png" src="_images/amp.png" style="width: 80%;" />
+</figure>
+</section>
+</section>
+</section>
+<section id="randomizer">
+<h3>Randomizer<a class="headerlink" href="#randomizer" title="Link to this heading"></a></h3>
+<p id="index-24">The Randomizer is available on the <strong>Orbiter screen</strong> <img alt="screen_orbiter" src="_images/home.png" style="height: 0.8em;" /> and
+allows for randomization of the <a class="reference internal" href="#corner">Corner</a>’s parameters and <a class="reference internal" href="#corner-matrix">Corner Matrix</a>.</p>
+<p>The <strong>Randomize</strong> <img alt="randomize" src="_images/die.png" style="height: 0.8em;" /> button generates a new set of parameters for
+all selected Corners (and the Corner Matrix) while the <strong>Undo</strong> <img alt="randomize_undo" src="_images/randomizeUndo.png" style="height: 0.8em;" />
+button reverts back to the previous state.</p>
+<p>The scope of randomization can be either four <strong>Corners</strong>’ parameters, the
+<strong>Corner Matrix</strong> configuration or <strong>Both</strong>.
+Moreover, it is possible to restrict the randomization to only the <strong>Selected</strong>
+corners as opposed to <strong>All Four</strong> of them.</p>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>The scope of the Randomizer can be configured in the <a class="reference internal" href="#corner-matrix">Corner Matrix</a>.</p>
+</div>
+</section>
+</section>
+<section id="polyphony">
+<h2>Polyphony<a class="headerlink" href="#polyphony" title="Link to this heading"></a></h2>
+<p id="index-25">Vector supports three distinct polyphony modes with different sets of
+parameters.</p>
+<table class="docutils align-center" id="id4" style="width: 100%">
+<caption><span class="caption-text">Available parameters in different modes</span><a class="headerlink" href="#id4" title="Link to this table"></a></caption>
+<colgroup>
+<col style="width: 28.0%" />
+<col style="width: 24.0%" />
+<col style="width: 24.0%" />
+<col style="width: 24.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p> </p></th>
+<th class="head"><p><strong>Mono</strong></p></th>
+<th class="head"><p><strong>Dual</strong></p></th>
+<th class="head"><p><strong>Poly</strong></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Detune</strong></p></td>
+<td><p>Stack</p></td>
+<td><p>Follower</p></td>
+<td><p>Drift</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Glide/Stereo</strong></p></td>
+<td><p>Glide</p></td>
+<td><p>Stereo Bias</p></td>
+<td><p>Stereo Scatter</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Volume</strong></p></td>
+<td><p>Stack</p></td>
+<td><p>Follower</p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Suborbit Offset</strong></p></td>
+<td><p>–</p></td>
+<td><p>Follower</p></td>
+<td><p>–</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Voices</strong></p></td>
+<td><p>1 to 16</p></td>
+<td><p>8</p></td>
+<td><p>16</p></td>
+</tr>
+</tbody>
+</table>
+<section id="poly-mode">
+<h3>Poly Mode<a class="headerlink" href="#poly-mode" title="Link to this heading"></a></h3>
+<p id="index-26">In the <strong>Poly Mode</strong>, each new note is played by a separate voice, resulting in
+a 16-voice polyphony. New individual voices can be randomly scattered (panned)
+across the stereo space using the <strong>Glide/Stereo</strong> knob and
+periodically randomly detuned by an amount controlled by the <strong>Detune Drift</strong>
+knob.</p>
+</section>
+<section id="dual-mode">
+<h3>Dual Mode<a class="headerlink" href="#dual-mode" title="Link to this heading"></a></h3>
+<p id="index-27">In the <strong>Dual Mode</strong>, each note is played by a separate voice which is
+complemented by a second <strong>follower voice</strong> with an altered pitch and amplitude.
+This mode thus effectively reduces the maximum number of concurrently playing
+voices to eight.</p>
+<p id="index-28">The pitch of the follower voice can be adjusted by the <strong>Detune Follower</strong>
+knob while the amplitude is controlled by the <strong>Follower Volume</strong> slider on the
+<strong>Effects screen</strong> <img alt="screen_effects" src="_images/sliders.png" style="height: 0.8em;" />.</p>
+<p id="index-29">The <strong>Suborbit Offset</strong> slider controls the suborbit phase offset between the
+main and the follower voice while the <strong>Glide/Stereo</strong> knob controls the stereo
+bias of the main voice (with the 50% value representing no bias).
+When the main voice is biased to the left, the follower voice is panned to the
+right and vice versa.</p>
+</section>
+<section id="mono-mode">
+<h3>Mono Mode<a class="headerlink" href="#mono-mode" title="Link to this heading"></a></h3>
+<p id="index-30">In the <strong>Mono Mode</strong>, all voices form a <strong>voice stack</strong> dedicated to playing one
+note, with each of the voices being slightly detuned by an amount derived from
+the <strong>Detune Stack</strong> knob and panned (evenly spread across the stereo space).</p>
+<p id="index-31">The number of available voices can be reduced using the <strong>Voices</strong> slider on the
+<strong>Effects screen</strong> <img alt="screen_effects" src="_images/sliders.png" style="height: 0.8em;" />, which when reduced to a single voice makes
+Vector act as a monophonic synthesizer. The <strong>Stack Volume</strong> controls the
+relative amplitudes of the voices in the stack except for the first voice.</p>
+<p id="index-32">The <strong>Glide</strong> knob controls the portamento time (i.e. the amount of time it
+takes to change the oscillator pitch between two overlapping notes).
+Glide can thus be used to play a legato effect by pressing a note followed by
+another note without releasing the first one.
+Legato can be also played by the <a class="reference internal" href="#arpeggiator">Arpeggiator</a> if two adjacent steps are
+<strong>chained</strong> <img alt="arp_joint" src="_images/arpJoint.png" style="height: 0.8em;" /> together.</p>
+</section>
+</section>
+<section id="arpeggiator">
+<h2>Arpeggiator<a class="headerlink" href="#arpeggiator" title="Link to this heading"></a></h2>
+<p id="index-33">The Arpeggiator records notes from its input and plays them out sequentially in
+eight steps, with multi-octave transpositions.</p>
+<p>The <strong>Active</strong> switch enables or disables the arpeggiator while the
+<strong>Note Length</strong> knob adjusts the length of notes played in each step relatively
+to the arpeggiator tempo (which is derived from the main <a class="reference internal" href="configuration.html#tempo"><span class="std std-ref">Tempo</span></a> and
+can be set to different time signatures).</p>
+<section id="step-grid">
+<h3>Step Grid<a class="headerlink" href="#step-grid" title="Link to this heading"></a></h3>
+<p id="index-34">The <strong>Effects screen</strong> <img alt="screen_effects" src="_images/sliders.png" style="height: 0.8em;" /> allows for more detailed control over
+the arpeggiator. The <strong>Step Grid</strong> <code class="docutils literal notranslate"><span class="pre">(2)</span></code> represents the arpeggiator sequence with
+octaves spread vertically. It is possible to select octave transposition for
+each step or to disable it completely. The velocity of each step in the sequence
+can be adjusted using the sliders below <code class="docutils literal notranslate"><span class="pre">(3)</span></code>. The adjacent notes can be chained
+together <code class="docutils literal notranslate"><span class="pre">(1)</span></code> into one.</p>
+<figure class="align-center align-default">
+<img alt="_images/arpeggiator.png" src="_images/arpeggiator.png" style="height: 12.5em;" />
+</figure>
+<p>The chaining either generates legato in the Mono <a class="reference internal" href="#polyphony">polyphony</a> mode or joins two
+steps with equal octaves in the Dual and Poly modes.</p>
+<p id="index-35">The arpeggiator note memory can be temporary (with arpeggiator playing only the
+currently pressed notes), <strong>Latched</strong> <img alt="arp_latch" src="_images/latch.png" style="height: 0.8em;" /> (notes stay in memory even
+after they are released), or <strong>Step-recorded</strong> <img alt="arp_step" src="_images/record.png" style="height: 0.5em;" />.
+The order in which the notes are played out can be sorted <strong>Up</strong> <img alt="arp_up" src="_images/up.png" style="height: 0.8em;" />,
+<strong>Down</strong> <img alt="arp_down" src="_images/down.png" style="height: 0.8em;" /> or <strong>Shuffled</strong> <img alt="arp_shuffled" src="_images/shuffle.png" style="height: 0.8em;" />.</p>
+</section>
+<section id="randomization">
+<h3>Randomization<a class="headerlink" href="#randomization" title="Link to this heading"></a></h3>
+<p id="index-36">To make the pattern produced by the arpeggiator vary over time, some of the
+parameters can be set to be automatically randomized while the arpeggiator is
+playing:</p>
+<ul class="simple">
+<li><p><strong>Octave Walk</strong> <img alt="random_keys" src="_images/randomKeys.png" style="height: 0.8em;" /> periodically alters octave transpositions of
+the individual steps.</p></li>
+<li><p><strong>Chain Walk</strong> <img alt="random_time" src="_images/randomTime.png" style="height: 0.8em;" /> alters the steps’ chaining.</p></li>
+<li><p><strong>Humanize</strong> alters note lengths.</p></li>
+</ul>
+<div class="admonition-hints admonition">
+<p class="admonition-title">Hints</p>
+<ul class="simple">
+<li><p>To feed notes into the arpeggiator, the <strong>Feed Direction</strong> switch must
+be set to <strong>Arp</strong> or <strong>Both</strong> and the <strong>Feed</strong> button has to be active
+(indicated by flashing LED), as described in section <a class="reference internal" href="overview.html#feed"><span class="std std-ref">Feed</span></a>.</p></li>
+<li><p>Depending on the <a class="reference internal" href="overview.html#feed"><span class="std std-ref">Feed</span></a> configuration, the arpeggiator can play in the
+background.</p></li>
+<li><p>To release notes from the arpeggiator, press the <strong>Latch</strong> <img alt="arp_latch" src="_images/latch.png" style="height: 0.8em;" />
+button twice.</p></li>
+<li><p>At least some octaves in the grid have to be enabled in order to make
+the arpeggiator output notes.</p></li>
+<li><p>The arpeggiator can be fed from a separate MIDI channel as described
+in <a class="reference internal" href="configuration.html#midi-configuration"><span class="std std-ref">MIDI configuration</span></a>. It can be also configured to output notes to a
+selected MIDI channel.</p></li>
+</ul>
+</div>
+</section>
+</section>
+<section id="effects">
+<h2>Effects<a class="headerlink" href="#effects" title="Link to this heading"></a></h2>
+<p>Vector has multiple effects connected to the output stage of the main
+mix of all <a class="reference internal" href="#corners">Corners</a>. Unlike Corners, the effects are independent of the
+<a class="reference internal" href="#orbiter">Orbiter</a> position.</p>
+<p>The Effects’ parameters are accessible on the two bottom-most rows of encoders
+(depending on the <a class="reference internal" href="overview.html#control"><span class="std std-ref">Control</span></a> switch configuration for some of
+them) with additional options available on the <strong>Effects screen</strong>
+<img alt="screen_effects" src="_images/sliders.png" style="height: 0.8em;" />.</p>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>To hear the output of <a class="reference internal" href="#reverb">Reverb</a>, <a class="reference internal" href="#chorus">Chorus</a> or <a class="reference internal" href="#delay">Delay</a>, the respective knob
+in the <a class="reference internal" href="overview.html#mixer"><span class="std std-ref">Mixer</span></a> section has to be turned up.</p>
+</div>
+<section id="vibrato-and-tremolo">
+<h3>Vibrato and Tremolo<a class="headerlink" href="#vibrato-and-tremolo" title="Link to this heading"></a></h3>
+<p id="index-37">Vibrato and tremolo are effects which periodically modulate the pitch and
+amplitude of the played notes. They are characterized by two parameters,
+depth and speed.</p>
+<p><strong>Vibrato Depth</strong> controls the amount of the pitch variation and
+<strong>Tremolo Depth</strong> controls the amplitude variation, while <strong>Vibrato Speed</strong> and
+<strong>Tremolo Speed</strong> control the frequency of each variation.</p>
+<p>The speed can be synchronized with the main <a class="reference internal" href="configuration.html#tempo"><span class="std std-ref">Tempo</span></a> using one of the
+switches in the <a class="reference internal" href="overview.html#sync"><span class="std std-ref">Sync</span></a> section.</p>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>To disable Vibrato or Tremolo, turn the respective Depth knob to zero.</p>
+</div>
+</section>
+<section id="drive">
+<h3>Drive<a class="headerlink" href="#drive" title="Link to this heading"></a></h3>
+<p id="index-38">Drive is derived from an overdrive effect known from guitar amplifiers where the
+input signal is saturated so that clipping occurs, adding a number of new
+harmonics to the signal.</p>
+<p>The effect consists of a band-pass filter followed by a saturator, wired in
+parallel. The filter’s cut-off frequency is controlled by the <strong>Drive Colour</strong>
+knob, while <strong>Drive Amount</strong> controls both the input gain of the saturator and
+the contribution of the Drive effect to the final mix.</p>
+<figure class="align-center align-default">
+<img alt="_images/drive.png" src="_images/drive.png" />
+</figure>
+<p>The <strong>Bypass</strong> <img alt="drive_bypass" src="_images/bypass.png" style="height: 0.8em;" /> button on the <strong>Effects screen</strong> <img alt="screen_effects" src="_images/sliders.png" style="height: 0.8em;" />
+disables the saturator. In this case, the <strong>Drive Amout</strong> only sets the mix
+level of the effect’s band-pass filter.</p>
+</section>
+<section id="chorus">
+<h3>Chorus<a class="headerlink" href="#chorus" title="Link to this heading"></a></h3>
+<p id="index-39">Chorus mixes together sounds played back at different pitches, resembling the
+effect of a choir or an orchestra section. It consists of several variable delay
+lines and an optional band-pass filter which are characterized by three
+parameters:</p>
+<ul class="simple">
+<li><p><strong>Chorus Depth</strong> controls the amount of detuning.</p></li>
+<li><p><strong>Chorus Speed</strong> determines the speeds of the variable delay lines
+(this can be synchronized with the main <a class="reference internal" href="configuration.html#tempo"><span class="std std-ref">Tempo</span></a> using one of the
+switches in the <a class="reference internal" href="overview.html#sync"><span class="std std-ref">Sync</span></a> section and additionally <strong>slowed down</strong> <img alt="snail" src="_images/snail.png" style="height: 0.8em;" />
+by a factor of two).</p></li>
+<li><p><strong>Chorus Colour</strong> controls the band-pass filter’s cutoff frequency if the
+filter is <strong>enabled</strong> <img alt="bandpass" src="_images/bandpass.png" style="height: 0.8em;" />.</p></li>
+</ul>
+<p>The effect can operate in mono or stereo. If the <strong>Stereo Mode</strong> <img alt="stereo" src="_images/stereo.png" style="height: 0.8em;" /> is
+enabled, the effect’s output is different for the left and right channels.</p>
+</section>
+<section id="delay">
+<h3>Delay<a class="headerlink" href="#delay" title="Link to this heading"></a></h3>
+<p id="index-40">The Delay effect adds a delayed version of the audio signal to the final mix.</p>
+<p><strong>Delay Time</strong> controls how much is the signal delayed and <strong>Delay Feedback</strong>
+controls the amount of output signal being fed back into the delay.
+Furthermore, Delay can be set to a <strong>dotted time</strong> <img alt="delay_dot" src="_images/delayDot.png" style="height: 0.6em;" /> and the feedback
+signal can be routed through an optional <strong>Band-pass Filter</strong> <img alt="bandpass" src="_images/bandpass.png" style="height: 0.8em;" />.</p>
+<p>If the Delay Feedback is set to a maximum (and the band-pass filter is
+disabled), the Delay effect behaves as a looper. If the feedback
+is set to zero, the internal audio buffer is fully cleared after one
+Delay Time period. If needed, the buffer can be <strong>cleared manually</strong>
+<img alt="dustbin" src="_images/dustbinSmall.png" style="height: 0.8em;" />.</p>
+<p>Delay can operate in mono or stereo. In the <strong>Stereo Mode</strong> <img alt="stereo" src="_images/stereo.png" style="height: 0.8em;" />, the
+effect’s output is different for the left and right channels (“ping-pong”).</p>
+<div class="admonition-hints admonition">
+<p class="admonition-title">Hints</p>
+<ul class="simple">
+<li><p>To feed notes into the delay, the <strong>Feed Direction</strong> switch must
+be set to <strong>Delay</strong> or <strong>Both</strong> and the <strong>Feed</strong> button has to be
+active (indicated by flashing LED), as described in <a class="reference internal" href="overview.html#feed"><span class="std std-ref">Feed</span></a>.</p></li>
+<li><p>Try recording a sample played by the <a class="reference internal" href="#arpeggiator">Arpeggiator</a> and then play it
+over a different sequence.</p></li>
+</ul>
+</div>
+</section>
+<section id="reverb">
+<h3>Reverb<a class="headerlink" href="#reverb" title="Link to this heading"></a></h3>
+<p id="index-41">Reverb simulates the reverberation of sound in a physical environment caused by
+reflections from the boundaries (walls of a concert hall for example).</p>
+<p><strong>Reverb Size</strong> increases the persistence of the processed sound (in the same
+way as larger rooms produce longer reverberation), while <strong>Reverb Colour</strong>
+controls the cutoff frequency of a band-pass filter at the effect’s output.</p>
+<p>The effect operates in stereo mode so its output is different for the
+left and right channels.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="overview.html" class="btn btn-neutral float-left" title="Overview" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="configuration.html" class="btn btn-neutral float-right" title="Configuration" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p></p>
+  </div>
+
+  
+    <p>
+        Copyright &copy; 2016–2026 Beetlecrab s.r.o.
+        Licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.
+    </p>
+    <p>
+        Released June 19, 2026 (firmware version <a href="https://beetlecrab.audio/vector/support/">2.8</a>).
+    </p>
+    <p>
+        Get a <a href="_static/vector_manual.pdf">PDF version</a> of the manual.
+        Visit <a href="https://beetlecrab.audio">beetlecrab.audio</a> for more information.
+    </p>
+
+     
+
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

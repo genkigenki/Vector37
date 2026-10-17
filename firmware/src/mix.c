@@ -38,17 +38,25 @@ static void synth_tick(void)
     }
 }
 
-/* a voice: its corners into one buffer, the amplitude, then its place in the stereo field */
+/* a voice: its corners into one buffer, the amplitude, then its place in the stereo field (the gains ramp over the
+ * block: the orbit's pan moves without a zipper) */
 static void voice_render(voice_t *v)
 {
     static int32_t tb[FT_N][CTL];                      /* (the audio ISR's alone) */
     int32_t x[CTL], i, c, a0 = v->amp, da, gl, gr, dl, dr, tl, tr;
-    uint32_t p = (uint32_t)(v->pan >> 5), used = 0;    /* pan 0..1023 -> a quarter sine: constant power */
+    /* the place: the voices' spread plus the orbit's side x WIDTH (0: the spread alone, as before); 0..1023 -> a
+     * quarter sine: constant power (panning only: L + R never cancels) */
+    uint32_t p = (uint32_t)(clamp(v->pan + ((v->opan * pt.g[G_WIDTH]) >> 8), 0, 32767) >> 5), used = 0;
     for (i = 0; i < CTL; i++)
         x[i] = 0;
     for (c = 0; c < NC; c++)
-        if (v->w[c] || v->wt[c])
-            corner_render(v, (uint32_t)c, tb, &used, v->w[c], v->wt[c]);
+        if (v->w[c] || v->wt[c]) {
+            const int16_t *cp = pt.c[c];
+            if (PAT_IS_WT((uint32_t)cp[CP_G1] % PAT_COUNT) || PAT_IS_WT((uint32_t)cp[CP_G2] % PAT_COUNT))
+                corner_render_wt(v, (uint32_t)c, tb, &used, v->w[c], v->wt[c]);   /* (a wavetable) */
+            else
+                corner_render(v, (uint32_t)c, tb, &used, v->w[c], v->wt[c]);
+        }
     voice_filters(v, tb, used, x);
     for (c = 0; c < NC; c++)
         v->w[c] = v->wt[c];
@@ -86,6 +94,9 @@ static void synth_block(int32_t *out, uint32_t n)
     for (i = 0; i < CTL; i++) {
         int32_t l = (bus_l[i] >> 5) * vol >> 9, r = (bus_r[i] >> 5) * vol >> 9, a, b;   /* (headroom: the bus to 1e6) */
         master_out(&l, &r);
+#if PANEL_MASTER
+        l = (l * panel_master_q12) >> 12, r = (r * panel_master_q12) >> 12;   /* (the FM-1's MASTER pot) */
+#endif
         a = l < 0 ? -l : l, b = r < 0 ? -r : r;
         if (a > syn.peak)
             syn.peak = a;

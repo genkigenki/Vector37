@@ -9,7 +9,8 @@ typedef struct {
     const char *const *names;
 } pdesc_t;
 
-static const char *const N_PAT[PAT_COUNT] = {"A", "B", "C", "D", "E", "F", "N"};
+static const char *const N_PAT[PAT_COUNT] = {"A", "B", "C", "D", "E", "F", "N", "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"};
+static const char *const N_WT[WT_NB] = {"SCAN", "PULSE", "VOWEL", "ORGAN", "SYNC", "FM", "STEPS", "WARP"};   /* (gen_tables.py) */
 static const char *const N_BMODE[BM_N] = {"AM", "PM", "PM+AM", "PD+AM", "RPD+AM"};
 static const char *const N_FTYPE[FT_N] = {"LP12", "LP24", "BP", "HP", "VOX", "OFF"};
 static const char *const N_RATIO[5] = {"1", "1/2", "1/3", "1/4", "1/5"};
@@ -31,6 +32,10 @@ static const pdesc_t CDESC[CP_N] = {
     [CP_T2] = {"TUNE 2", 0, 4, 0, F_ENUM, N_RATIO},
     [CP_LEVEL] = {"LEVEL", 0, 127, 127, F_NUM, 0},
     [CP_MUTE] = {"MUTE", 0, 1, 0, F_ONOFF, 0},
+    [CP_WP1] = {"WT POS 1", 0, 127, 0, F_NUM, 0},          /* GEN 1's wavetable: where it reads (frame 1 .. 32) */
+    [CP_WO1] = {"WT ORBIT 1", -64, 63, 40, F_SIGNED, 0},   /* ... how far the moon moves it as it nears the planet */
+    [CP_WP2] = {"WT POS 2", 0, 127, 0, F_NUM, 0},
+    [CP_WO2] = {"WT ORBIT 2", -64, 63, 40, F_SIGNED, 0},
 };
 
 static const pdesc_t GDESC[G_COUNT] = {
@@ -79,6 +84,7 @@ static const pdesc_t GDESC[G_COUNT] = {
     [G_MORPH] = {"MORPH", -64, 63, -64, F_SIGNED, 0},
     [G_AUDITION] = {"AUDITION", 0, 1, 1, F_ONOFF, 0},
     [G_SPIN] = {"SPIN", -64, 63, 0, F_SIGNED, 0},            /* (0 still; the sign the direction; v^2: turns a beat) */
+    [G_WIDTH] = {"WIDTH", 0, 127, 85, F_NUM, 0},             /* the orbit in stereo: 0 mono, 127 the planets at the sides */
 };
 
 /* the initial sound: C + D (a saw) round four corners of the classic patterns, low-passed */

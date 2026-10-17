@@ -1,0 +1,289 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Overview &mdash; Vector Operator&#39;s Manual</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/vector.css?v=60349a46" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=4348de45"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Sound engine" href="sound_engine.html" />
+    <link rel="prev" title="Quick start guide" href="quickstart.html" />
+    <!-- Matomo -->
+    <script>
+      var _paq = window._paq = window._paq || [];
+      /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+      _paq.push(['trackPageView']);
+      _paq.push(['enableLinkTracking']);
+      (function() {
+        var u="https://stats.beetlecrab.audio/";
+        _paq.push(['setTrackerUrl', u+'matomo.php']);
+        _paq.push(['setSiteId', '2']);
+        var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+        g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+      })();
+    </script>
+    <!-- End Matomo Code -->
+
+     
+
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html">
+            
+              <img src="_static/logo_white.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick start guide</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#front-panel">Front panel</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#input">Input</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#envelope">Envelope</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#mixer">Mixer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#feed">Feed</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#sync">Sync</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="sound_engine.html">Sound engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="specs.html">Specifications</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="genindex.html">Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Vector</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Overview</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="overview">
+<h1>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h1>
+<p>Vector is a digital desktop synthesizer based around the <a class="reference internal" href="sound_engine.html#orbiter"><span class="std std-ref">Orbiter</span></a>.
+Four separate sound generators (<a class="reference internal" href="sound_engine.html#corners"><span class="std std-ref">Corners</span></a>), each with a
+separate blend and filter stages, are mixed together based on the Orbiter
+position in a 2D space and the final mix is then processed by various
+<a class="reference internal" href="sound_engine.html#effects"><span class="std std-ref">Effects</span></a>.
+The Corners are triggered either by notes sent from an external MIDI controller
+or from an internal <a class="reference internal" href="sound_engine.html#arpeggiator"><span class="std std-ref">Arpeggiator</span></a>.</p>
+<p>Vector’s control elements consist of a 7” capacitive touchscreen display,
+25 click-less rotary encoders, 7 toggle switches, and 4 buttons
+with status LEDs, all grouped into various sections on the <a class="reference internal" href="#front-panel"><span class="std std-ref">Front panel</span></a>.</p>
+<p>Furthermore, the display is divided into a few screens:</p>
+<ul class="simple">
+<li><p><img alt="screen_orbiter" src="_images/home.png" style="height: 0.8em;" /> <strong>Orbiter Screen</strong>, the main screen with <a class="reference internal" href="sound_engine.html#orbiter"><span class="std std-ref">Orbiter</span></a>,</p></li>
+<li><p><img alt="screen_effects" src="_images/sliders.png" style="height: 0.8em;" /> <strong>Effects Screen</strong>, a “secondary” screen with <a class="reference internal" href="sound_engine.html#effects"><span class="std std-ref">Effects</span></a>
+controls,</p></li>
+<li><p><img alt="screen_presets" src="_images/presets.png" style="height: 0.8em;" /> <strong>Presets Screen</strong>, which allows system and user
+<a class="reference internal" href="configuration.html#presets"><span class="std std-ref">Presets</span></a> to be loaded and stored,</p></li>
+<li><p><img alt="screen_routing" src="_images/modulation.png" style="height: 0.8em;" /> <strong>Routing Screen</strong>, with per-preset <a class="reference internal" href="configuration.html#routing"><span class="std std-ref">Routing</span></a> of
+selected MIDI parameters, and</p></li>
+<li><p><img alt="screen_settings" src="_images/systemSettings.png" style="height: 0.8em;" /> <strong>Settings Screen</strong> with <a class="reference internal" href="configuration.html#global-settings"><span class="std std-ref">Global settings</span></a> (MIDI etc.).</p></li>
+</ul>
+<p>Orbiter screen is the main screen which appears on power-up and allows access to
+the “secondary” Effects screen. The Presets and Routing screens are accessible
+from the Effects screen while the Settings screen is accessible from the Routing
+screen.</p>
+<section id="front-panel">
+<h2>Front panel<a class="headerlink" href="#front-panel" title="Link to this heading"></a></h2>
+<p>The control elements on the front panel are grouped into multiple sections:
+<a class="reference internal" href="#input"><span class="std std-ref">Input</span></a> <code class="docutils literal notranslate"><span class="pre">(1)</span></code>, <a class="reference internal" href="#envelope"><span class="std std-ref">Envelope</span></a> <code class="docutils literal notranslate"><span class="pre">(2)</span></code>, <a class="reference internal" href="#mixer"><span class="std std-ref">Mixer</span></a> <code class="docutils literal notranslate"><span class="pre">(3)</span></code>,
+<a class="reference internal" href="#feed"><span class="std std-ref">Feed</span></a> and <a class="reference internal" href="sound_engine.html#arpeggiator"><span class="std std-ref">Arpeggiator</span></a> <code class="docutils literal notranslate"><span class="pre">(4)</span></code>, and <a class="reference internal" href="#sync"><span class="std std-ref">Sync</span></a> <code class="docutils literal notranslate"><span class="pre">(5)</span></code>.</p>
+<p>This section covers the front panel elements in detail.</p>
+<figure class="align-center align-default">
+<img alt="_images/vector_front.png" src="_images/vector_front.png" />
+</figure>
+<section id="input">
+<h3>Input<a class="headerlink" href="#input" title="Link to this heading"></a></h3>
+<p id="index-0">The <strong>Corner Matrix</strong> button brings up the <a class="reference internal" href="sound_engine.html#corner-matrix"><span class="std std-ref">Corner Matrix</span></a>, which allows
+the configuration and routing of filters and selecting which of the four
+<a class="reference internal" href="sound_engine.html#corners"><span class="std std-ref">Corners</span></a> of the <a class="reference internal" href="sound_engine.html#orbiter"><span class="std std-ref">Orbiter</span></a> are currently under editing.</p>
+<p>Some rotary encoders have more than one function – in such a case the two
+functions are written below the encoder. The <strong>Upper</strong> function corresponds to
+elements on the <strong>Orbiter screen</strong> <img alt="screen_orbiter" src="_images/home.png" style="height: 0.8em;" /> and the <strong>Lower</strong> function
+controls elements on the <strong>Effects screen</strong> <img alt="screen_effects" src="_images/sliders.png" style="height: 0.8em;" />.</p>
+<p id="control">The <strong>Control</strong> switch sets which function is used. In <strong>Auto</strong> mode, the
+function follows the active screen on the display for convenience.</p>
+<figure class="align-center align-default">
+<img alt="_images/control.png" src="_images/control.png" style="height: 6em;" />
+</figure>
+<p>In the case illustrated above, the <strong>Control</strong> switch is in the <strong>Auto</strong> mode
+which means the encoder either functions as <strong>Suborbit Size</strong> or <strong>Detune</strong>,
+depending on the active screen.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The <strong>Corner Matrix</strong> button is called <strong>Corner Select</strong> on Vectors
+manufactured before 2021.</p>
+</div>
+</section>
+<section id="envelope">
+<h3>Envelope<a class="headerlink" href="#envelope" title="Link to this heading"></a></h3>
+<p id="index-1">Vector has two independent envelopes. The <strong>Amp</strong> envelope defines the
+shape of the amplitude of produced sounds, while the <strong>Orbit</strong> envelope
+defines the movement of the <a class="reference internal" href="sound_engine.html#adsr-shape"><span class="std std-ref">ADSR orbiter shape</span></a>
+(see the <a class="reference internal" href="sound_engine.html#warp"><span class="std std-ref">Warp</span></a> section for more details).</p>
+<p>The knobs in the <strong>Envelope</strong> section control the the lengths of the
+<strong>Attack</strong>, <strong>Decay</strong> and <strong>Release</strong> phases and the level of the <strong>Sustain</strong>
+phase.</p>
+<figure class="align-center align-default">
+<img alt="_images/envelope.png" src="_images/envelope.png" style="height: 10.5em;" />
+</figure>
+<p>The envelope is triggered on a per-voice basis when a note is played.
+It is possible to choose either exponential (<strong>Exp</strong>) or linear (<strong>Lin</strong>)
+curve for each envelope.</p>
+<div class="admonition-hints admonition">
+<p class="admonition-title">Hints</p>
+<ul class="simple">
+<li><p>To use the same ADSR envelope for both the amplitude and orbiter shape,
+select the <strong>Both</strong> option on the screen.</p></li>
+<li><p>The final amplitude of the played note is affected by its MIDI velocity
+(subject to <a class="reference internal" href="configuration.html#midi-configuration"><span class="std std-ref">MIDI configuration</span></a>).</p></li>
+</ul>
+</div>
+</section>
+<section id="mixer">
+<h3>Mixer<a class="headerlink" href="#mixer" title="Link to this heading"></a></h3>
+<p id="index-2">The <strong>Mixer</strong> section controls the amount of the individual effects
+(<a class="reference internal" href="sound_engine.html#reverb"><span class="std std-ref">Reverb</span></a>, <a class="reference internal" href="sound_engine.html#chorus"><span class="std std-ref">Chorus</span></a>, <a class="reference internal" href="sound_engine.html#delay"><span class="std std-ref">Delay</span></a>) mixed with the dry signal and also
+the <strong>Volume</strong> of the final stage of the audio chain.</p>
+<p>The level of the output signal is indicated on a bar graph meter on the
+<strong>Orbiter screen</strong> <img alt="screen_orbiter" src="_images/home.png" style="height: 0.8em;" />. If clipping occurs, its colour turns red.</p>
+</section>
+<section id="feed">
+<h3>Feed<a class="headerlink" href="#feed" title="Link to this heading"></a></h3>
+<p id="index-3">The <strong>Feed Direction</strong> switch enables the routing of notes to <strong>Arpeggiator</strong>
+and of audio input to <strong>Delay</strong>.</p>
+<p>The <strong>Feed</strong> button cuts the connections altogether, while both
+<a class="reference internal" href="sound_engine.html#arpeggiator"><span class="std std-ref">Arpeggiator</span></a> and <a class="reference internal" href="sound_engine.html#delay"><span class="std std-ref">Delay</span></a> continue processing normally.
+When Feed is active, the respective LED next to the <strong>Feed Direction</strong> switch is
+flashing.</p>
+<figure class="align-center align-default">
+<img alt="_images/feed.png" src="_images/feed.png" style="height: 12em;" />
+</figure>
+<p>Using the two control elements, it is possible to have the following routing:</p>
+<ul class="simple">
+<li><p>Notes to <a class="reference internal" href="sound_engine.html#arpeggiator"><span class="std std-ref">Arpeggiator</span></a>,</p></li>
+<li><p>Audio to <a class="reference internal" href="sound_engine.html#delay"><span class="std std-ref">Delay</span></a>,</p></li>
+<li><p>Both, or</p></li>
+<li><p>None of the above.</p></li>
+</ul>
+<p>The status of <strong>Feed Direction</strong> is also indicated in the <strong>Delay</strong>
+section on the <strong>Effects screen</strong> <img alt="screen_effects" src="_images/sliders.png" style="height: 0.8em;" />.</p>
+</section>
+<section id="sync">
+<h3>Sync<a class="headerlink" href="#sync" title="Link to this heading"></a></h3>
+<p id="index-4">The <strong>Sync</strong> section allows the synchronization of the <a class="reference internal" href="sound_engine.html#orbiter"><span class="std std-ref">Orbiter</span></a>’s suborbit
+movement, <a class="reference internal" href="sound_engine.html#vibrato-and-tremolo"><span class="std std-ref">Vibrato and Tremolo</span></a>, <a class="reference internal" href="sound_engine.html#delay"><span class="std std-ref">Delay</span></a> and <a class="reference internal" href="sound_engine.html#chorus"><span class="std std-ref">Chorus</span></a> to the main
+tempo or to let them run on their own. When an element is synchronized, it
+snaps to the closest time signature.</p>
+<p>The LED next to the <strong>Tap</strong> button indicates the current tempo and the tempo can
+be changed by tapping the button several times. See the <a class="reference internal" href="configuration.html#tempo"><span class="std std-ref">Tempo</span></a> section for
+more details.</p>
+<p id="focus">The <strong>Focus</strong> button temporarily disables the <a class="reference internal" href="sound_engine.html#orbiter"><span class="std std-ref">Orbiter</span></a> movement and cycles
+through each the four Corners, making it easy to tweak the Corners’ synthesis
+parameters. The focus mode is indicated by the associated LED and can be
+exited by holding the <strong>Focus</strong> button longer.</p>
+<p>When the <a class="reference internal" href="sound_engine.html#corner-matrix"><span class="std std-ref">Corner Matrix</span></a> is displayed, the focus mode cycles through the
+four Corners. When the <a class="reference internal" href="sound_engine.html#orbiter"><span class="std std-ref">Orbiter</span></a> is displayed, the focus mode has an
+additional step in which the Orbiter is collapsed and placed in the middle of
+the screen.
+The additional step is useful to temporarily bypass the Orbiter and perform the
+movement manually.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="quickstart.html" class="btn btn-neutral float-left" title="Quick start guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="sound_engine.html" class="btn btn-neutral float-right" title="Sound engine" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p></p>
+  </div>
+
+  
+    <p>
+        Copyright &copy; 2016–2026 Beetlecrab s.r.o.
+        Licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.
+    </p>
+    <p>
+        Released June 19, 2026 (firmware version <a href="https://beetlecrab.audio/vector/support/">2.8</a>).
+    </p>
+    <p>
+        Get a <a href="_static/vector_manual.pdf">PDF version</a> of the manual.
+        Visit <a href="https://beetlecrab.audio">beetlecrab.audio</a> for more information.
+    </p>
+
+     
+
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

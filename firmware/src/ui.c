@@ -7,32 +7,67 @@
  *   K1-K8: the selected planets: GEN 1, GEN 2, TUNE 2, BLEND, MODE, CUTOFF, RESO, LEVEL (source, filter, level).
  *   Faders: the path: FAMILY, SIZE, SPEED, MORPH (a new sound brings its own; a moved fader's value glides to it,
  *   then follows). Wheels: bend, suborbit size. SEQ: FREEZE (held: the ORBIT knobs).
- *   Buttons: < > the sounds; a held button lends the knobs another set (ORBIT, VOICE, EFFECTS, CORNER+, ARP) while
- *   held, its tap an action (next shape, voice mode, ...); KNOB BANK opens and closes the guide (K1 scrolls it).
+ *   Buttons: < > the sounds; a set's button (CHORD VOICE, FX MIXER, FADER BANK MORE, ARP) tapped opens its knob
+ *   set and it stays open (its light lit) until the button is tapped again or another set's is; held while a knob
+ *   turns, the set is lent only while held. KNOB BANK opens and closes the guide (K1 scrolls it).
+ *   BT: the SETUP set (MIDI channels, pad light, the sound at power-on). PATCH held: SAVE the sound in its place
+ *   (let go), or with PARA: FACTORY (scenes.c).
  * Every touch is noted (ui.touch) for the screen: it shows the touched thing first, and a hint line. */
+#if BOARD_SMK37
 enum { B_KNOBBANK, B_FADERBANK, B_LEFT, B_RIGHT, B_OCTDN, B_OCTUP, B_ARP, B_REPEAT, B_SCALE, B_CHORD, B_GLOBE,
        B_BT, B_PATCH, B_PARA, B_FX, B_SEQ, B_PLAY, B_REC };
+#define PANEL_KEYS() fm1_in.keys
+#else   /* the FM-1's buttons (its matrix ids), named by the job they take over (panel_fm1.c): ENV = CHORD (VOICE), LFO =
+         * FADER BANK (MORE), SAVE = PARA (RANDOM / UNDO), GLO = GLOBE (FOCUS) */
+enum { B_OCTDN, B_OCTUP, B_FX, B_SEL, B_CHORD, B_FADERBANK, B_EDIT, B_GLOBE, B_HOME, B_PARA, B_ARP, B_SEQ, B_PLAY, B_REC };
+#define B_SCALE 0xFF                               /* (no button: the WAVE set is page 4, panel_fm1.c) */
+#define PANEL_KEYS() fm1_in.notes
+#endif
 
 /* the knob sets: the default (the corner), and one per button held */
-enum { L_MAIN, L_ORBIT, L_VOICE, L_FX, L_CORNER, L_ARP, L_N };
+enum { L_MAIN, L_ORBIT, L_VOICE, L_FX, L_CORNER, L_ARP, L_WAVE, L_SETUP, L_N };
 typedef struct { uint8_t corner; uint8_t id; } kdest_t;    /* corner: 1 a corner parameter (of the selected), 2 a
-                                                              setting (not the sound's: SDESC) */
+                                                              setting (not the sound's: SDESC), 3 VOICES (the voice
+                                                              mode and the stack in one: kd_voices) */
 typedef struct { const char *name; uint8_t btn; kdest_t k[8]; } layer_t;
 #define KC(x) {1, x}
 #define KS(x) {2, x}
-enum { S_TRS, S_N };                               /* the settings on a knob */
+#define KV {3, 0}
+static const char *const N_VOICES[2 + NVOICE] = {"POLY", "DUAL", "MONO 1", "MONO 2", "MONO 3", "MONO 4", "MONO 5", "MONO 6",
+                                                 "MONO 7", "MONO 8"};
+static const pdesc_t VDESC = {"VOICES", 0, 1 + NVOICE, 0, F_ENUM, N_VOICES};   /* POLY, DUAL, MONO x the stack */
+enum { S_TRS, S_MIDIIN, S_BRIGHT, S_START, S_N };   /* the settings on a knob (scenes.c keeps them) */
 static const pdesc_t SDESC[S_N] = {
-    [S_TRS] = {"TRS MIDI OUT", 0, 1, 1, F_ONOFF, 0},   /* the 3.5 mm jack: the keys and wheels as played (smk_midi_out.h) */
+    [S_TRS] = {"TRS MIDI OUT", 0, 16, 1, F_NUM, 0},    /* the 3.5 mm jack: OFF, or the channel (smk_midi_out.h) */
+    [S_MIDIIN] = {"MIDI IN", 0, 16, 0, F_NUM, 0},      /* USB MIDI in: OMNI, or that channel only */
+    [S_BRIGHT] = {"PAD LIGHT", 1, 8, 5, F_NUM, 0},
+    [S_START] = {"START SOUND", 0, 3 * NPRESET - 1, 0, F_NUM, 0},   /* the sound at power-on: FACTORY 1..16, USER,
+                                                                       FACTORY 2 17..32 (scenes.c) */
 };
 #define LAYER_HELD(l) ((l) > L_ORBIT)              /* a button held lends the knobs its set */
 #define KG(x) {0, x}
 static const layer_t LAYERS[L_N] = {
     [L_MAIN] = {"PLANET", 0xFF, {KC(CP_G1), KC(CP_G2), KC(CP_T2), KC(CP_BLEND), KC(CP_BMODE), KC(CP_CUT), KC(CP_RES), KC(CP_LEVEL)}},
-    [L_ORBIT] = {"ORBIT", 0xFF, {KG(G_WARPX), KG(G_WARPY), KG(G_ROT), KG(G_SHARP), KG(G_SUBSZ), KG(G_SPIN), KG(G_RETRIG), KG(G_TEMPO)}},   /* (no planet selected) */
-    [L_VOICE] = {"VOICE", B_CHORD, {KG(G_AA), KG(G_AD), KG(G_AS), KG(G_AR), KG(G_DETUNE), KG(G_GLIDE), KG(G_STACK), KG(G_STEREO)}},
+#if BOARD_SMK37
+    [L_ORBIT] = {"ORBIT", 0xFF, {KG(G_WARPX), KG(G_WARPY), KG(G_ROT), KG(G_SHARP), KG(G_SUBSZ), KG(G_SPIN), KG(G_WIDTH), KG(G_TEMPO)}},   /* (no planet selected; RESTART: REPEAT) */
+#else   /* (the FM-1: no mod wheel, MOON SPEED here; BPM: the ARP set, PLAY) */
+    [L_ORBIT] = {"ORBIT", 0xFF, {KG(G_WARPX), KG(G_WARPY), KG(G_ROT), KG(G_SHARP), KG(G_SUBSZ), KG(G_SPIN), KG(G_WIDTH), KG(G_SUBSPD)}},
+#endif
+    [L_VOICE] = {"VOICE", B_CHORD, {KG(G_AA), KG(G_AD), KG(G_AS), KG(G_AR), KG(G_DETUNE), KG(G_GLIDE), KV, KG(G_STEREO)}},
     [L_FX] = {"MIXER", B_FX, {KG(G_RVMIX), KG(G_DLMIX), KG(G_CHMIX), KG(G_DRIVE), KG(G_RVSIZE), KG(G_DLTIME), KG(G_DLFB), KG(G_VOLUME)}},
     [L_CORNER] = {"MORE", B_FADERBANK, {KC(CP_T1), KC(CP_TRACK), KC(CP_FTYPE), KG(G_DCOL), KG(G_CHDEP), KG(G_CHSPD), KG(G_RVCOL), KG(G_AUDITION)}},
+#if BOARD_SMK37
     [L_ARP] = {"ARP", B_ARP, {KG(G_ARP), KG(G_TEMPO), KG(G_OA), KG(G_OD), KG(G_OS), KG(G_OR), KG(G_BEND), KS(S_TRS)}},
+#else   /* (no TRS MIDI OUT on the FM-1) */
+    [L_ARP] = {"ARP", B_ARP, {KG(G_ARP), KG(G_TEMPO), KG(G_OA), KG(G_OD), KG(G_OS), KG(G_OR), KG(G_BEND), {0xFF, 0}}},
+#endif
+    /* the selected planets' wavetables: where each generator reads, how far the moon moves it (SCALE held) */
+    [L_WAVE] = {"WAVE", B_SCALE, {KC(CP_WP1), KC(CP_WO1), KC(CP_WP2), KC(CP_WO2), {0xFF, 0}, {0xFF, 0}, {0xFF, 0}, {0xFF, 0}}},
+#if BOARD_SMK37   /* the settings, not the sound's (kept in the store a few seconds after the last change) */
+    [L_SETUP] = {"SETUP", B_BT, {KS(S_TRS), KS(S_MIDIIN), KS(S_BRIGHT), KS(S_START), {0xFF, 0}, {0xFF, 0}, {0xFF, 0}, {0xFF, 0}}},
+#else   /* (the FM-1: no store, no set) */
+    [L_SETUP] = {"SETUP", 0xFF, {{0xFF, 0}, {0xFF, 0}, {0xFF, 0}, {0xFF, 0}, {0xFF, 0}, {0xFF, 0}, {0xFF, 0}, {0xFF, 0}}},
+#endif
 };
 static const uint8_t FADER_G[4] = {G_SHAPE, G_SIZE, G_RATE, G_MORPH};   /* the faders: the path */
 enum { PG_SELECT, PG_MODE, PG_FILTER, PG_MUTE };   /* the pad groups, left to right */
@@ -44,9 +79,16 @@ enum { TK_NONE, TK_CKNOB, TK_GKNOB, TK_PAD, TK_FADER, TK_WHEEL };   /* what was 
 
 static struct {
     uint8_t sel;                           /* the corners K1-K5 edit (bits) */
-    uint8_t preset;
+    uint8_t preset;                        /* the sound's slot in its bank */
+    uint8_t bank;                          /* its bank: BK_F1 FACTORY, BK_USER, BK_F2 FACTORY 2 */
+    uint8_t list;                          /* the sound list is open (PATCH) */
+    uint8_t lbank;                         /* ... showing this bank */
+    uint32_t list_t;                       /* ... touched last (it closes 10 s after) */
+    uint32_t patch_tap;                    /* PATCH pressed at (ms | 1): again within 350 ms: ALL NOTES OFF */
+    uint16_t lpad, lsaved;                 /* pads pressed in the list; ... held long enough to SAVE (done) */
     int8_t oct;
-    uint8_t layer;                         /* the knob set now (a button held) */
+    uint8_t layer;                         /* the knob set now (a set open, or its button held) */
+    uint8_t latch;                         /* the set left open by a tap of its button (0: none) */
     struct { uint8_t kind, k, cmask, grp, layer; uint32_t until; } touch;   /* (layer: the knob set then) */
     uint8_t arp_last;                      /* the arpeggiator's mode when on */
     uint8_t dirty;
@@ -54,7 +96,7 @@ static struct {
     uint32_t msg_until;
     uint8_t kturn;                         /* the knob turned last (+1), shown bright until kturn_t */
     uint32_t kturn_t;
-    uint32_t enc_t[FM1_NENC];
+    uint32_t enc_t[8];                     /* (a knob of the set: 0..7) */
     uint32_t btn_t[FM1_NBTN];              /* held since (ms | 1), 0 = up */
     uint8_t btn_used[FM1_NBTN];            /* a knob turned while it was held: no tap on release */
     uint32_t pad_t[16];                    /* pads held since (ms | 1) */
@@ -82,6 +124,7 @@ static struct {
     struct { uint8_t on, corner, note; uint32_t t, rel; } aud;   /* AUDITION: a planet heard alone (since t; released at rel) */
     patch_t undo;                          /* before the last randomize */
     uint8_t has_undo;
+    uint32_t set_t;                        /* a setting changed at (ms | 1): saved a while after (settings_tick) */
 } ui = {.sel = 0u, .arp_last = ARP_UP, .mw_last = -1};
 
 static void ui_say(const char *a, const char *b)   /* the hint line */
@@ -103,9 +146,9 @@ static void touched(uint32_t kind, uint32_t k, uint32_t cmask, uint32_t grp)
 /* ------------------------------------------------------------- TRS MIDI OUT --- */
 /* the 3.5 mm jack (smk_midi_out.h): the keys as played (note on with the key's velocity, its note off: the note it
  * was sent with, whatever the octave since), the pitch wheel (pitch bend, centre at rest) and the mod wheel (CC 1),
- * on MIDI channel 1; not the arpeggiator, the latch or the sound. Only to the jack: USB MIDI out stays quiet (a
- * computer sending it back would play the notes twice). ARP held, K8: ON / OFF (ON at power-on). */
-#define TRS_CH 0u                                  /* channel 1 */
+ * on the channel set (SETUP K1 or ARP K8: OFF, CH1 .. CH16; channel 1 unless changed); not the arpeggiator, the latch or
+ * the sound. Only to the jack: USB MIDI out stays quiet (a computer sending it back would play the notes twice). */
+#define TRS_CH ((uint32_t)settings.trs_ch & 15u)
 #define TRS_GAP 4u                                 /* ms between two bends / two mod values (the line's pace) */
 #define TRS_PKT(cin, st, d1, d2) ((uint32_t)(cin) | (uint32_t)(st) << 8 | (uint32_t)(d1) << 16 | (uint32_t)(d2) << 24)
 static struct {
@@ -155,7 +198,7 @@ static void trs_all_off(void)                      /* before TRS MIDI OUT goes O
 /* ------------------------------------------------------------- values --- */
 static const pdesc_t *kd_desc(const kdest_t *k)
 {
-    return k->corner == 0xFF ? 0 : k->corner == 2u ? &SDESC[k->id] : k->corner ? &CDESC[k->id] : &GDESC[k->id];
+    return k->corner == 0xFF ? 0 : k->corner == 3u ? &VDESC : k->corner == 2u ? &SDESC[k->id] : k->corner ? &CDESC[k->id] : &GDESC[k->id];
 }
 static uint32_t sel_first(void)                    /* the first selected corner (shown) */
 {
@@ -165,10 +208,26 @@ static uint32_t sel_first(void)                    /* the first selected corner 
             return c;
     return 0;
 }
+static int32_t set_get(uint32_t id)
+{
+    switch (id) {
+    case S_TRS:
+        return trs_out ? 1 + (int32_t)TRS_CH : 0;
+    case S_MIDIIN:
+        return settings.midi_in;
+    case S_BRIGHT:
+        return settings.bright;
+    default:
+        return settings.preset;
+    }
+}
+static int32_t kd_voices(void) { return pt.g[G_POLY] == PM_MONO ? 1 + clamp(pt.g[G_STACK], 1, NVOICE) : pt.g[G_POLY] % PM_N; }
 static int32_t kd_get(const kdest_t *k)
 {
-    if (k->corner == 2u)                           /* (S_TRS, the only setting; 2: ON but not sending) */
-        return trs_out ? 1 + smo.dead : 0;
+    if (k->corner == 3u)
+        return kd_voices();
+    if (k->corner == 2u)                           /* the settings */
+        return set_get(k->id);
     return k->corner == 0xFF ? 0 : k->corner ? pt.c[sel_first()][k->id] : pt.g[k->id];
 }
 
@@ -210,13 +269,26 @@ static void val_text(const pdesc_t *d, int32_t v, uint32_t id, int corner, char 
     }
 }
 /* a knob's label and value in the layer now (for the screen) */
+static void slot_label(char *b, uint32_t n, uint32_t bank, uint32_t slot);
+static void list_knob(uint32_t k, int32_t s);
 static void knob_text(uint32_t k, const char **label, char *val, uint32_t n)
 {
     const kdest_t *d = &LAYERS[ui.layer].k[k];
     const pdesc_t *p = kd_desc(d);
     *label = p ? p->label : "";
-    if (d->corner == 2u) {                         /* (TRS MIDI OUT; the UART never finished a byte: turning it ON tries again) */
-        str_cpy(val, !trs_out ? "OFF" : smo.dead ? "NOT SENDING" : "ON", n);
+    if (d->corner == 2u) {                         /* the settings (TRS MIDI OUT: the UART never finished a byte: NOT SENDING;
+                                                      a turn up tries again) */
+        int32_t v = set_get(d->id);
+        char nb[8] = "CH";
+        if (d->id == S_START)
+            slot_label(val, n, (uint32_t)v / NPRESET, (uint32_t)v % NPRESET);   /* (USER: "U3 ...", or EMPTY: then
+                                                                                    the factory sound at power-on) */
+        else if (d->id == S_BRIGHT)
+            fmt_int(val, v);
+        else {
+            fmt_int(nb + 2, v);
+            str_cpy(val, !v ? (d->id == S_TRS ? "OFF" : "OMNI") : d->id == S_TRS && smo.dead ? "NOT SENDING" : nb, n);
+        }
         return;
     }
     val_text(p, kd_get(d), d->id, d->corner == 1u, val, n);
@@ -232,19 +304,107 @@ static int32_t accel(uint32_t e, int32_t s, int32_t span)
 }
 
 /* ------------------------------------------------------------- sounds --- */
-static void faders_release(void);
-static void preset_load(uint32_t n)
+/* three banks of sixteen: FACTORY (sounds 1..16) and FACTORY 2 (17..32), never changed, and USER (yours: SAVE, a pad
+ * held in the sound list; scenes.c keeps them). The sound now: ui.bank and its slot ui.preset. The banks in turn
+ * (the list's K1, < >): FACTORY, USER, FACTORY 2 (as SETUP's START SOUND and the store number them) */
+#define BK_F1 0u
+#define BK_USER 1u
+#define BK_F2 2u
+#define NBANK 3u
+static uint32_t bank_step(uint32_t b, int32_t d) { return (b + (d < 0 ? NBANK - 1u : 1u)) % NBANK; }
+static uint32_t bank_first(uint32_t b) { return b == BK_F2 ? NPRESET : 0u; }   /* (its first factory sound) */
+static uint32_t sound_fact(void)                   /* the factory sound the sound now is (a USER slot: it came from) */
 {
-    n %= NPRESET;
-    ev_push(EV_ALLOFF, 0, 0);
-    preset_make(n, &pt);
-    ui.sel = 0;                                    /* (a new sound: nothing selected, the knobs are the orbit) */
+    return ui.bank == BK_USER ? usr.src[ui.preset] % NFACT : bank_first(ui.bank) + ui.preset;
+}
+static void faders_release(void);
+static void sound_reset(void)                      /* a new sound: as it comes */
+{
+    ui.sel = 0;                                    /* (nothing selected, the knobs are the orbit) */
     faders_release();                              /* (the faders take over the new path softly) */
-    ui.preset = (uint8_t)n;
     ui.has_undo = 0;
     focus = 0;
     latch = 0;
     ui.dirty = 1;
+}
+static void preset_load(uint32_t n)                /* factory sound n (0..31: FACTORY 1..16, FACTORY 2 17..32) */
+{
+    n %= NFACT;
+    ev_push(EV_ALLOFF, 0, 0);
+    preset_make(n, &pt);
+    ui.bank = (uint8_t)(n >= NPRESET ? BK_F2 : BK_F1);
+    ui.preset = (uint8_t)(n % NPRESET);
+    sound_reset();
+}
+static int user_load(uint32_t n)                   /* USER slot n (empty: nothing changes, -1) */
+{
+    if (!usr_has(n))
+        return -1;
+    ev_push(EV_ALLOFF, 0, 0);
+    pt = usr.p[n];
+    ui.bank = BK_USER;
+    ui.preset = (uint8_t)n;
+    sound_reset();
+    return 0;
+}
+static void sound_start(uint32_t s)                /* the sound at power-on (SETUP K4: FACTORY 1..16, USER 1..16, FACTORY 2
+                                                      17..32; an empty USER slot: the factory sound of its number) */
+{
+    if (s >= 2u * NPRESET)
+        preset_load(NPRESET + s % NPRESET);
+    else if (s < NPRESET || user_load(s - NPRESET))
+        preset_load(s % NPRESET);
+}
+static void slot_label(char *b, uint32_t n, uint32_t bank, uint32_t slot)   /* "3 GLASS BELLS", USER "U3 GLASS BELLS",
+                                                                              FACTORY 2 "17 WARM STRINGS" */
+{
+    uint32_t user = bank == BK_USER;
+    b[0] = 0;
+    if (user)
+        str_cpy(b, "U", n);
+    fmt_int(b + (user ? 1 : 0), (user ? 0 : bank_first(bank)) + slot + 1);
+    str_cat(b, " ", n);
+    if (user && !usr_has(slot))
+        str_cat(b, "EMPTY", n);
+    else
+        str_cat(b, PRESET_NAME[user ? usr.src[slot] % NFACT : (bank_first(bank) + slot) % NFACT], n);
+}
+static void preset_label(char *b, uint32_t n) { slot_label(b, n, ui.bank, ui.preset); }   /* the sound now */
+static void sound_step(int32_t d)                  /* < >: the previous / next sound of its bank (USER: the saved ones) */
+{
+    uint32_t i, s = ui.preset;
+    if (ui.bank != BK_USER) {
+        preset_load(bank_first(ui.bank) + (ui.preset + NPRESET + (d > 0 ? 1u : NPRESET - 1u)) % NPRESET);
+        return;
+    }
+    for (i = 0; i < USR_SLOTS; i++) {
+        s = (s + (d > 0 ? 1u : USR_SLOTS - 1u)) % USR_SLOTS;
+        if (usr_has(s)) {
+            user_load(s);
+            return;
+        }
+    }
+}
+/* SAVE: the sound as it is now into USER slot n (named after the factory sound it came from); then that slot plays */
+static void sound_save(uint32_t n)
+{
+    char b[28];
+    uint32_t src = sound_fact();
+    if (usr_save(n, &pt, src)) {
+        ui_say("NOT SAVED", 0);
+        return;
+    }
+    ui.bank = BK_USER;
+    ui.preset = (uint8_t)n;
+    str_cpy(b, "SAVED ", sizeof b);
+    slot_label(b + 6, sizeof b - 6, BK_USER, n);
+    ui_say(b, 0);
+}
+static void notes_off(void)                        /* ALL NOTES OFF: every voice, the latch (PATCH twice quickly) */
+{
+    ev_push(EV_ALLOFF, 0, 0);
+    latch = 0;
+    ui_say("ALL NOTES OFF", 0);
 }
 
 /* RANDOMIZE: new sounds in the selected corners (the patterns, the blend, the filter); the old ones kept for undo */
@@ -303,6 +463,41 @@ static void audition_tick(void)
         solo = 0, ui.aud.rel = 0;
 }
 
+/* ------------------------------------------------------------- settings --- */
+static void set_turn(uint32_t id, int32_t s)
+{
+    const pdesc_t *p = &SDESC[id];
+    int32_t was = set_get(id), v = clamp(was + s, p->min, p->max);
+    if (id == S_TRS) {                             /* OFF, CH1 .. CH16 (a turn up on NOT SENDING tries the UART again) */
+        if (v == was && !(s > 0 && smo.dead))
+            return;
+        if (trs_out)
+            trs_all_off();                         /* (the notes held let go on the jack first, on their channel) */
+        if (v)
+            settings.trs_ch = (uint8_t)(v - 1);
+        if (!v || !trs_out || smo.dead)
+            smo_on(v != 0);
+        settings.trs_off = (uint8_t)!v;
+    } else {
+        if (v == was)
+            return;
+        if (id == S_MIDIIN)
+            settings.midi_in = (uint8_t)v, ev_push(EV_ALLOFF, 0, 0);   /* (notes of the old channel: off) */
+        else if (id == S_BRIGHT)
+            settings.bright = (uint8_t)v;
+        else
+            settings.preset = (uint8_t)v;
+    }
+    ui.set_t = fm1_ms | 1u;
+}
+static void settings_tick(void)                    /* a setting changed: kept 3 s after the last change, no key held */
+{
+    if (ui.set_t && (int32_t)(fm1_ms - ui.set_t) >= 3000 && !ui.keys && !ui.aud.on) {
+        ui.set_t = 0;
+        settings_save();
+    }
+}
+
 /* ------------------------------------------------------------- knobs --- */
 static void knob_turn(uint32_t k, int32_t s)
 {
@@ -311,13 +506,27 @@ static void knob_turn(uint32_t k, int32_t s)
     uint32_t c;
     if (!p)
         return;
+    if (d->corner == 1u && !ui.sel) {              /* (a planet's knob with none selected: the WAVE set) */
+        ui_say("SELECT A PLANET FIRST", 0);
+        return;
+    }
     s = accel(k, s, p->max - p->min);
-    if (d->corner == 2u) {                         /* TRS MIDI OUT: right ON, left OFF (ON tries the UART again) */
+    if (d->corner == 2u) {                         /* a setting */
         if (!s)
             return;
-        if (s < 0 && trs_out)
-            trs_all_off();                         /* (the notes held let go on the jack first) */
-        smo_on(s > 0);
+        set_turn(d->id, s);
+        ui.kturn = (uint8_t)(k + 1u);
+        ui.kturn_t = fm1_ms + 1500u;
+        touched(TK_GKNOB, k, 0u, 0);
+        return;
+    }
+    if (d->corner == 3u) {                         /* VOICES: POLY, DUAL, MONO 1 .. 8 (the stack) */
+        int32_t v = clamp(kd_voices() + (s > 0 ? 1 : -1), 0, 1 + NVOICE), was = pt.g[G_POLY];
+        pt.g[G_POLY] = (int16_t)(v < 2 ? v : PM_MONO);
+        if (v >= 2)
+            pt.g[G_STACK] = (int16_t)(v - 1);
+        if (pt.g[G_POLY] != was)
+            ev_push(EV_ALLOFF, 0, 0);              /* (another voice mode: from silence) */
         ui.kturn = (uint8_t)(k + 1u);
         ui.kturn_t = fm1_ms + 1500u;
         touched(TK_GKNOB, k, 0u, 0);
@@ -347,6 +556,7 @@ static void knob_turn(uint32_t k, int32_t s)
             solo = ui.sel;                         /* (several selected: heard together) */
     }
 }
+#if BOARD_SMK37
 static void knobs_poll(void)
 {
     uint32_t k, b;
@@ -354,6 +564,10 @@ static void knobs_poll(void)
     for (k = 0; k < 8u; k++) {
         if ((s = fm1_enc_take(k)) == 0)
             continue;
+        if (ui.list) {                             /* the sound list: K1 the bank, K2 the sounds */
+            list_knob(k, s);
+            continue;
+        }
         if (ui.help) {                             /* the guide: K1 scrolls it */
             if (k == 0u)
                 ui.mscroll = (int16_t)clamp(ui.mscroll + s * 24, 0, MANUAL_H - 222);
@@ -366,15 +580,102 @@ static void knobs_poll(void)
         knob_turn(k, s);
     }
 }
+#endif
 
 /* ------------------------------------------------------------- pads --- */
 static const char *const CORNER_NAME[NC] = {"1", "2", "3", "4"};
 static const char *const N_MUTE[2] = {"ON", "MUTE"};
+/* the sound list (PATCH): the bank shown (< > or K1: FACTORY, USER, FACTORY 2), sixteen slots, one a pad (top row 1-8, bottom
+ * row 9-16): a tap plays that sound, a pad held 1 s SAVEs the sound now into that USER slot; K2 steps through the
+ * bank; PATCH again (or 10 s untouched) closes it; PATCH twice quickly: ALL NOTES OFF */
+#define LIST_SAVE_MS 1000u
+static void list_open(uint32_t on)
+{
+    ui.list = (uint8_t)on;
+    ui.lbank = ui.bank;
+    ui.lpad = ui.lsaved = 0;
+    ui.list_t = fm1_ms;
+    ui.msg_until = fm1_ms;                         /* (the top line: the list's own) */
+    ui.dirty = 1;
+}
+static void list_pick(uint32_t bank, uint32_t slot)   /* a slot tapped: its sound */
+{
+    char b[28];
+    if (bank == BK_USER ? user_load(slot) : (preset_load(bank_first(bank) + slot), 0)) {
+        ui_say("EMPTY: HOLD THE PAD TO SAVE", 0);
+        return;
+    }
+    preset_label(b, sizeof b);
+    ui_say(b, 0);
+}
+static void list_pad_press(uint32_t pad)
+{
+    ui.list_t = fm1_ms;
+    ui.pad_t[pad] = fm1_ms | 1u;
+    if (pad < NPRESET)
+        ui.lpad |= (uint16_t)(1u << pad);
+    ui.dirty = 1;
+}
+static void list_pad_release(uint32_t pad)
+{
+    ui.pad_t[pad] = 0;
+    if (!((ui.lpad >> pad) & 1u))
+        return;
+    ui.lpad &= (uint16_t)~(1u << pad);
+    if (!((ui.lsaved >> pad) & 1u))
+        list_pick(ui.lbank, pad);
+    ui.lsaved &= (uint16_t)~(1u << pad);
+    ui.list_t = fm1_ms;
+    ui.dirty = 1;
+}
+static void list_tick(void)                       /* a pad held 1 s: SAVE there; untouched 10 s: closed */
+{
+    uint32_t pad;
+    if (!ui.list)
+        return;
+    for (pad = 0; pad < NPRESET; pad++)
+        if ((ui.lpad >> pad) & 1u && !((ui.lsaved >> pad) & 1u) && fm1_ms - (ui.pad_t[pad] & ~1u) >= LIST_SAVE_MS) {
+            ui.lsaved |= (uint16_t)(1u << pad);
+            sound_save(pad);
+            ui.lbank = BK_USER;                    /* (the USER bank in view: the slot just saved) */
+            ui.list_t = fm1_ms;
+            ui.dirty = 1;
+        }
+    if (!ui.lpad && fm1_ms - ui.list_t >= 10000u)
+        list_open(0);
+}
+static void list_knob(uint32_t k, int32_t s)      /* K1: the bank; K2: the previous / next sound of the bank shown */
+{
+    ui.list_t = fm1_ms;
+    if (k == 0u)
+        ui.lbank = (uint8_t)bank_step(ui.lbank, s);
+    else if (k == 1u) {
+        if (ui.lbank != ui.bank) {                 /* (the other bank: from its first slot) */
+            uint32_t i;
+            for (i = 0; i < NPRESET; i++)
+                if (ui.lbank != BK_USER || usr_has(i)) {
+                    list_pick(ui.lbank, i);
+                    break;
+                }
+        } else {
+            char b[28];
+            sound_step(s);
+            preset_label(b, sizeof b);
+            ui_say(b, 0);
+        }
+    }
+    ui.dirty = 1;
+}
+
 static void pad_press(uint32_t pad)               /* one press, one step */
 {
     uint32_t grp = (pad & 7u) >> 1, c = (pad & 1u) | (pad >= 8u ? 2u : 0u), p, others = 0;
     int16_t *q = pt.c[c];
     char b[28];
+    if (ui.list) {
+        list_pad_press(pad);
+        return;
+    }
     ui.pad_t[pad] = fm1_ms | 1u;
     switch (grp) {
     case PG_SELECT:                                /* tap: this planet alone (a selected one: out, at the release);
@@ -423,6 +724,10 @@ static void pad_press(uint32_t pad)               /* one press, one step */
 static void pad_release(uint32_t pad)
 {
     uint32_t c = (pad & 1u) | (pad >= 8u ? 2u : 0u);
+    if (ui.list || ((ui.lpad >> pad) & 1u)) {
+        list_pad_release(pad);
+        return;
+    }
     ui.pad_t[pad] = 0;
     if (((pad & 7u) >> 1) == PG_SELECT && ((ui.sel_pend >> c) & 1u)) {
         ui.sel_pend &= (uint8_t)~(1u << c);
@@ -433,6 +738,7 @@ static void pad_release(uint32_t pad)
         }
     }
 }
+#if BOARD_SMK37
 static void pads_poll(void)
 {
     int32_t e;
@@ -444,6 +750,7 @@ static void pads_poll(void)
             pad_release(pad);
     }
 }
+#endif
 
 /* ------------------------------------------------------------- buttons --- */
 static void tap_tempo(void)
@@ -458,6 +765,37 @@ static void tap_tempo(void)
     } else
         ui_say("TAP", 0);
 }
+/* the knob sets: a set's button tapped leaves its set open (tapped again: closed; another set's: that one); held
+ * while a knob turns, the set only while held. The open set shows in the central box (or its planet's bubble) and by
+ * its button's light */
+static uint32_t layer_of_btn(uint32_t b)
+{
+    uint32_t l;
+    for (l = L_ORBIT + 1u; l < L_N; l++)
+        if (LAYERS[l].btn == b)
+            return l;
+    return 0;
+}
+static void latch_tap(uint32_t b)                  /* a set's button tapped */
+{
+    uint32_t l = layer_of_btn(b);
+    ui.latch = (uint8_t)(ui.latch == l ? 0u : l);
+    ui.dirty = 1;
+}
+static uint32_t layer_now(void)                    /* the set the knobs play now */
+{
+    uint32_t l = ui.sel ? L_MAIN : L_ORBIT, b;
+    if (ui.latch)
+        l = ui.latch;
+    for (b = L_ORBIT + 1u; b < L_N; b++)           /* (a set's button held: its set while held) */
+        if (LAYERS[b].btn != 0xFF && ui.btn_t[LAYERS[b].btn] &&
+            ((int32_t)(fm1_ms - ui.btn_t[LAYERS[b].btn]) >= 200 || ui.btn_used[LAYERS[b].btn]))
+            l = b;
+    if (ui.help)
+        l = ui.sel ? L_MAIN : L_ORBIT;
+    return l;
+}
+#if BOARD_SMK37
 static void button_tap(uint32_t b)                 /* a button let go without a knob turned */
 {
     switch (b) {
@@ -465,20 +803,13 @@ static void button_tap(uint32_t b)                 /* a button let go without a 
         freeze ^= 1u;
         ui_say(freeze ? "FREEZE: THE ORBIT STANDS" : "FREEZE OFF: IT MOVES ON", 0);
         break;
-    case B_CHORD:                                  /* POLY -> DUAL -> MONO */
-        ev_push(EV_ALLOFF, 0, 0);
-        pt.g[G_POLY] = (int16_t)((pt.g[G_POLY] + 1) % PM_N);
-        ui_say(N_POLY[pt.g[G_POLY]], 0);
-        break;
-    case B_ARP:
-        pt.g[G_ARP] = (int16_t)(pt.g[G_ARP] ? ARP_OFF : ui.arp_last);
-        ui_say("ARP ", N_ARP[pt.g[G_ARP]]);
-        break;
-    case B_FX:                                     /* (a tap: say what holding does) */
-        ui_say("HOLD FX: MIXER KNOBS", 0);
-        break;
+    case B_CHORD:                                  /* the sets: open / closed (VOICES, POLY .. MONO: VOICE K7; */
+    case B_ARP:                                    /* the arpeggiator: ARP K1) */
+    case B_FX:
     case B_FADERBANK:
-        ui_say("HOLD FADER BANK: MORE KNOBS", 0);
+    case B_SCALE:
+    case B_BT:                                     /* SETUP */
+        latch_tap(b);
         break;
     case B_PARA:                                   /* randomize (held: undo, below) */
         randomize();
@@ -494,10 +825,13 @@ static void button_press(uint32_t b)
     case B_LEFT:
     case B_RIGHT: {
         char nb[24];
-        preset_load(ui.preset + NPRESET + (b == B_RIGHT ? 1u : NPRESET - 1u));
-        fmt_int(nb, ui.preset + 1);
-        str_cat(nb, " ", sizeof nb);
-        str_cat(nb, PRESET_NAME[ui.preset], sizeof nb);
+        if (ui.list) {                             /* the sound list: the other banks in turn */
+            ui.lbank = (uint8_t)bank_step(ui.lbank, b == B_RIGHT ? 1 : -1);
+            ui.list_t = fm1_ms;
+            break;
+        }
+        sound_step(b == B_RIGHT ? 1 : -1);
+        preset_label(nb, sizeof nb);
         ui_say(nb, 0);
         break;
     }
@@ -514,11 +848,11 @@ static void button_press(uint32_t b)
         pt.g[G_RETRIG] ^= 1;
         ui_say("RESTART ", pt.g[G_RETRIG] ? "ON" : "OFF");
         break;
-    case B_GLOBE:                                  /* FOCUS: corner 1 2 3 4, the centre, ...; held: off */
-        focus = (uint8_t)(focus % 5u + 1u);
-        if (focus <= 4u)
+    case B_GLOBE:                                  /* FOCUS: corner 1 2 3 4, the centre, off, ...; held: off */
+        focus = (uint8_t)((focus + 1u) % 6u);
+        if (focus && focus <= 4u)
             ui.sel = (uint8_t)(1u << (focus - 1u));
-        ui_say("FOCUS ", focus == 5u ? "CENTRE" : CORNER_NAME[focus - 1u]);
+        ui_say("FOCUS ", !focus ? "OFF" : focus == 5u ? "CENTRE" : CORNER_NAME[focus - 1u]);
         break;
     case B_REC:
         latch ^= 1u;
@@ -529,10 +863,15 @@ static void button_press(uint32_t b)
         break;
     case B_KNOBBANK:
         break;                                     /* (the guide: buttons_poll) */
-    case B_PATCH:
-        ev_push(EV_ALLOFF, 0, 0);
-        latch = 0;
-        ui_say("ALL NOTES OFF", 0);
+    case B_PATCH:                                  /* the sound list, open / closed; twice quickly: ALL NOTES OFF */
+        if (ui.patch_tap && fm1_ms - ui.patch_tap < 350u) {
+            ui.patch_tap = 0;
+            list_open(0);
+            notes_off();
+        } else {
+            ui.patch_tap = fm1_ms | 1u;
+            list_open(!ui.list);
+        }
         break;
     default:
         break;
@@ -550,7 +889,7 @@ static void buttons_poll(void)
         }
         if ((rel >> b) & 1u && ui.btn_t[b]) {
             int32_t held = (int32_t)(fm1_ms - ui.btn_t[b]);
-            if (!ui.btn_used[b] && held < 500)
+            if (!ui.btn_used[b] && (held < 500 || layer_of_btn(b)))   /* (a set's button: no knob turned, open) */
                 button_tap(b);
             ui.btn_t[b] = 0;
         }
@@ -574,15 +913,11 @@ static void buttons_poll(void)
         ui.help ^= 1u;
         ui.dirty = 1;
     }
-    l = ui.sel ? L_MAIN : L_ORBIT;                 /* the knob set: the planets or the orbit; a held button's */
-    for (b = 1; b < L_N; b++)
-        if (LAYERS[b].btn != 0xFF && ui.btn_t[LAYERS[b].btn] && ((int32_t)(fm1_ms - ui.btn_t[LAYERS[b].btn]) >= 200 || ui.btn_used[LAYERS[b].btn]))
-            l = b;
-    if (ui.help)
-        l = ui.sel ? L_MAIN : L_ORBIT;
+    l = layer_now();                               /* the knob set: the planets or the orbit; an open set; a held one */
     if (l != ui.layer)
         ui.layer = (uint8_t)l, ui.dirty = 1;
 }
+#endif
 
 /* ------------------------------------------------------------- wheels, faders, keys --- */
 /* the mod wheel: MOON SPEED (the suborbit's speed). It stays where it is put: its place is the value; a new sound
@@ -632,6 +967,7 @@ static void mod_in(int32_t v)                       /* the wheel (or MIDI CC 1),
         }
     }
 }
+#if BOARD_SMK37
 /* the pitch and mod wheels, self-calibrating (SLOOP's smk_wheels): X springs back (bend), Y 0..32767 */
 static void wheels_poll(void)
 {
@@ -676,6 +1012,7 @@ static void wheels_poll(void)
         mod_in(x);
     joy_y = x;
 }
+#endif
 
 /* the faders: the path (FAMILY, SIZE, SPEED, MORPH). A new sound brings its own path values; the first deliberate
  * move of a fader makes its value glide to where the fader is (~0.4 s: the path morphs), then it follows the fader.
@@ -733,6 +1070,7 @@ static void faders_glide(void)                      /* (every pass of the main l
             ui.dirty = 1;
         }
 }
+#if BOARD_SMK37
 static void faders_poll(void)
 {
     uint32_t i;
@@ -783,8 +1121,9 @@ static void keys_poll(void)
             trs_note(k, (uint32_t)n, (now >> k) & 1u ? vel : 0u);   /* the jack: as played */
         }
 }
+#endif
 
-/* USB MIDI in: notes, pitch bend, the mod wheel (CC 1), all notes off (CC 123) */
+/* USB MIDI in: notes, pitch bend, the mod wheel (CC 1), all notes off (CC 123); any channel, or the one set (SETUP K2) */
 static void midi_poll(void)
 {
     while (mi_r != mi_w) {
@@ -794,6 +1133,8 @@ static void midi_poll(void)
         RING_PUBLISH();
         mi_r++;
         cin = pkt & 15u, d1 = (pkt >> 16) & 127u, d2 = (pkt >> 24) & 127u;
+        if (settings.midi_in && cin >= 8u && cin <= 14u && ((pkt >> 8) & 15u) != settings.midi_in - 1u)
+            continue;                              /* (MIDI IN on one channel: the others pass by) */
         if (cin == 9u && d2)
             ev_push(EV_ON, d1, d2);
         else if (cin == 8u || cin == 9u)
@@ -812,41 +1153,58 @@ static void midi_poll(void)
  * purple; MUTE green, a muted corner red */
 static const uint8_t GCOL[4][3] = {{40, 110, 255}, {255, 120, 0}, {170, 40, 255}, {40, 255, 80}};
 static const uint8_t MUTED_COL[3] = {255, 0, 0};
+#if BOARD_SMK37
 static void ui_leds(void)
 {
     uint32_t pad, sc = 4u + settings.bright * 12u;  /* pad brightness of 256 */
     for (pad = 0; pad < 16u; pad++) {
         uint32_t grp = (pad & 7u) >> 1, c = (pad & 1u) | (pad >= 8u ? 2u : 0u), k = 150;
         const uint8_t *col = GCOL[grp];
+        if (ui.list) {                             /* the sound list: a slot per pad (the sound now bright; USER: the
+                                                      saved ones lit, empty ones dark) */
+            static const uint8_t LCOL[NBANK][3] = {{255, 200, 90}, {80, 200, 255}, {255, 120, 200}};   /* (by bank) */
+            col = LCOL[ui.lbank % NBANK];
+            k = pad >= NPRESET ? 0u : ui.lbank == ui.bank && pad == ui.preset ? 256u
+                : ui.lbank == BK_USER && !usr_has(pad) ? 8u : 50u;
+            if (pad < NPRESET && ((ui.lpad >> pad) & 1u))
+                k = 256u;
+            padled_set(pad, (uint8_t)(col[0] * k * sc >> 16), (uint8_t)(col[1] * k * sc >> 16), (uint8_t)(col[2] * k * sc >> 16));
+            continue;
+        }
         if (grp == PG_SELECT)
             k = (ui.sel >> c) & 1u ? 256u : 60u;
         else if (grp == PG_MUTE && pt.c[c][CP_MUTE])
             col = MUTED_COL, k = 110;
         padled_set(pad, (uint8_t)(col[0] * k * sc >> 16), (uint8_t)(col[1] * k * sc >> 16), (uint8_t)(col[2] * k * sc >> 16));
     }
-    fm1_led_key(B_ARP, pt.g[G_ARP] != 0);
+    fm1_led_key(B_ARP, ui.layer == L_ARP || (pt.g[G_ARP] && fm1_ms % 1000u < 500u));   /* (its set lit; running: blinks) */
     fm1_led_key(B_REPEAT, pt.g[G_RETRIG] != 0);
     fm1_led_key(B_REC, latch);
     fm1_led_key(B_GLOBE, focus != 0);
     fm1_led_key(B_FX, ui.layer == L_FX);
     fm1_led_key(B_FADERBANK, ui.layer == L_CORNER);
+    fm1_led_key(B_SCALE, ui.layer == L_WAVE);
+    fm1_led_key(B_BT, ui.layer == L_SETUP);
     fm1_led_key(B_SEQ, freeze);
     fm1_led_key(B_CHORD, ui.layer == L_VOICE);
     fm1_led_key(B_KNOBBANK, ui.help);
+    fm1_led_key(B_PATCH, ui.list);
     fm1_led_key(B_PARA, ui.has_undo);
     fm1_led_key(B_PLAY, fm1_ms % (60000u / (uint32_t)pt.g[G_TEMPO]) < 60u);   /* the beat */
     fm1_led_key(B_OCTDN, ui.oct < 0);
     fm1_led_key(B_OCTUP, ui.oct > 0);
 }
+#endif
 
 static void ui_init(void)
 {
     uint32_t i;
     for (i = 0; i < 4u; i++)
         ui.fad_last[i] = 0xFF;
-    preset_load(settings.preset);
+    sound_start(settings.preset);
 }
 
+#if BOARD_SMK37
 static void ui_input(void)
 {
     pads_poll();
@@ -856,4 +1214,9 @@ static void ui_input(void)
     knobs_poll();
     faders_poll();
     audition_tick();
+    settings_tick();
+    list_tick();
 }
+#else
+#include "panel_fm1.c"                          /* the FM-1's panel: the knobs, buttons, keys, LEDs */
+#endif

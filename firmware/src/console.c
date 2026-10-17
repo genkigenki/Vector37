@@ -352,14 +352,15 @@ static void con_preset(const char *p)                   /* preset N: a factory s
 {
     int ok;
     uint32_t n = con_num(&p, &ok);
-    if (!ok || n < 1u || n > NPRESET) {
-        con_puts("usage: preset 1..8\r\n");
+    if (!ok || n < 1u || n > NFACT) {
+        con_puts("usage: preset 1..32\r\n");
         return;
     }
     preset_load(n - 1u);
     con_kv("loaded", (int32_t)n);
 }
 
+#if BOARD_SMK37
 static void con_smk(void)                               /* the SMK-37 Pro inputs (smk_input.h) */
 {
     uint32_t i;
@@ -423,6 +424,27 @@ static void con_padtest(void)
     con_puts("top row from the left: red green blue white\r\n");
 }
 
+#else
+static void con_smk(void)                               /* the FM-1's inputs (fm1_input.h), MASTER */
+{
+    uint32_t i;
+    con_kv("frames", (int32_t)fm1_in.frames);
+    con_kx("buttons", fm1_in.buttons);
+    con_kx("notes", fm1_in.notes);
+    con_kv("master", fm1_adc_read(FM1_ADC_MASTER));
+    for (i = 0; i < FM1_NENC; i++) {
+        con_puts("enc");
+        con_dec((int32_t)i);
+        con_putc('=');
+        con_dec(fm1_in.enc_steps[i]);
+        con_putc(i + 1u == FM1_NENC ? '\r' : ' ');
+    }
+    con_puts("\r\n");
+}
+static void con_leds(void) { con_puts("the FM-1 has no pads\r\n"); }
+static void con_padtest(void) { con_leds(); }
+
+#endif
 static void con_exec(const char *p)
 {
     if (con_word(&p, "help") || con_word(&p, "?"))

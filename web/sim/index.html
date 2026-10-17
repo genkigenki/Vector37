@@ -96,8 +96,8 @@
 </div>
 <div class="help">Laid out like the SMK-37 Pro: wheels, the screen with its six buttons, K1..K8 over the 16 pads, the faders
   over the 2 x 6 buttons, the keys below. The pads are four groups of 2 x 2: in each group the four pads are the four
-  corners, as on the screen (SELECT, MODE, FILTER, MUTE). No planet selected (a SELECT pad tapped again): the knobs are the orbit. A held button lends the knobs another set (hold it with the mouse,
-  turn a knob with the scroll wheel). Computer keyboard: 1–8 = top pads, A W S E D F T G Y H U J K = keys, Z / X = octave.
+  corners, as on the screen (SELECT, MODE, FILTER, MUTE). No planet selected (a SELECT pad tapped again): the knobs are the orbit. CHORD, FX, FADER BANK, ARP: a click opens the knob set, another click closes it (held while turning a knob with the
+  scroll wheel: only while held). Computer keyboard: 1–8 = top pads, A W S E D F T G Y H U J K = keys, Z / X = octave.
   A MIDI keyboard plays the keys. The control map: docs/CONTROLS.md.</div>
 <div id="start">click to start the sound</div>
 <script>
@@ -118,10 +118,10 @@ function drawFb(fb) {
 }
 
 // ---- buttons (HAL ids): SMK name, what it does in Vector37 (held: the knobs' set)
-const BTN = [["KNOB BANK", "held HELP"], ["FADER BANK", "held MORE"], ["<", "sound"], [">", "sound"],
-  ["OCTAVE-", "octave"], ["OCTAVE+", "octave"], ["ARP", "on · held ARP"], ["NOTE REPEAT", "RESTART"], ["SCALE", "-"],
-  ["CHORD", "voices · held VOICE"], ["GLOBE", "FOCUS · held off"], ["BT", "-"], ["PATCH", "all notes off"],
-  ["PARA", "RANDOM · held UNDO"], ["FX", "held MIXER"], ["SEQ", "FREEZE"], ["SEQ PLAY", "TAP tempo"],
+const BTN = [["KNOB BANK", "held HELP"], ["FADER BANK", "MORE set"], ["<", "sound"], [">", "sound"],
+  ["OCTAVE-", "octave"], ["OCTAVE+", "octave"], ["ARP", "ARP set"], ["NOTE REPEAT", "RESTART"], ["SCALE", "WAVE set"],
+  ["CHORD", "VOICE set"], ["GLOBE", "FOCUS · held off"], ["BT", "-"], ["PATCH", "all notes off"],
+  ["PARA", "RANDOM · held UNDO"], ["FX", "MIXER set"], ["SEQ", "FREEZE"], ["SEQ PLAY", "TAP tempo"],
   ["SEQ REC", "LATCH"]];
 const btnEl = [];
 function button(b, parent) {

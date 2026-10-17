@@ -1,0 +1,105 @@
+
+Overview
+Vector is a digital desktop synthesizer based around the Orbiter.
+Four separate sound generators (Corners), each with a
+separate blend and filter stages, are mixed together based on the Orbiter
+position in a 2D space and the final mix is then processed by various
+Effects.
+The Corners are triggered either by notes sent from an external MIDI controller
+or from an internal Arpeggiator.
+Vector’s control elements consist of a 7” capacitive touchscreen display,
+25 click-less rotary encoders, 7 toggle switches, and 4 buttons
+with status LEDs, all grouped into various sections on the Front panel.
+Furthermore, the display is divided into a few screens:
+[img: screen_orbiter] Orbiter Screen, the main screen with Orbiter,
+[img: screen_effects] Effects Screen, a “secondary” screen with Effects
+controls,
+[img: screen_presets] Presets Screen, which allows system and user
+Presets to be loaded and stored,
+[img: screen_routing] Routing Screen, with per-preset Routing of
+selected MIDI parameters, and
+[img: screen_settings] Settings Screen with Global settings (MIDI etc.).
+Orbiter screen is the main screen which appears on power-up and allows access to
+the “secondary” Effects screen. The Presets and Routing screens are accessible
+from the Effects screen while the Settings screen is accessible from the Routing
+screen.
+Front panel
+The control elements on the front panel are grouped into multiple sections:
+Input (1), Envelope (2), Mixer (3),
+Feed and Arpeggiator (4), and Sync (5).
+This section covers the front panel elements in detail.
+[img: _images/vector_front.png]
+Input
+The Corner Matrix button brings up the Corner Matrix, which allows
+the configuration and routing of filters and selecting which of the four
+Corners of the Orbiter are currently under editing.
+Some rotary encoders have more than one function – in such a case the two
+functions are written below the encoder. The Upper function corresponds to
+elements on the Orbiter screen [img: screen_orbiter] and the Lower function
+controls elements on the Effects screen [img: screen_effects].
+The Control switch sets which function is used. In Auto mode, the
+function follows the active screen on the display for convenience.
+[img: _images/control.png]
+In the case illustrated above, the Control switch is in the Auto mode
+which means the encoder either functions as Suborbit Size or Detune,
+depending on the active screen.
+Note
+The Corner Matrix button is called Corner Select on Vectors
+manufactured before 2021.
+Envelope
+Vector has two independent envelopes. The Amp envelope defines the
+shape of the amplitude of produced sounds, while the Orbit envelope
+defines the movement of the ADSR orbiter shape
+(see the Warp section for more details).
+The knobs in the Envelope section control the the lengths of the
+Attack, Decay and Release phases and the level of the Sustain
+phase.
+[img: _images/envelope.png]
+The envelope is triggered on a per-voice basis when a note is played.
+It is possible to choose either exponential (Exp) or linear (Lin)
+curve for each envelope.
+Hints
+To use the same ADSR envelope for both the amplitude and orbiter shape,
+select the Both option on the screen.
+The final amplitude of the played note is affected by its MIDI velocity
+(subject to MIDI configuration).
+Mixer
+The Mixer section controls the amount of the individual effects
+(Reverb, Chorus, Delay) mixed with the dry signal and also
+the Volume of the final stage of the audio chain.
+The level of the output signal is indicated on a bar graph meter on the
+Orbiter screen [img: screen_orbiter]. If clipping occurs, its colour turns red.
+Feed
+The Feed Direction switch enables the routing of notes to Arpeggiator
+and of audio input to Delay.
+The Feed button cuts the connections altogether, while both
+Arpeggiator and Delay continue processing normally.
+When Feed is active, the respective LED next to the Feed Direction switch is
+flashing.
+[img: _images/feed.png]
+Using the two control elements, it is possible to have the following routing:
+Notes to Arpeggiator,
+Audio to Delay,
+Both, or
+None of the above.
+The status of Feed Direction is also indicated in the Delay
+section on the Effects screen [img: screen_effects].
+Sync
+The Sync section allows the synchronization of the Orbiter’s suborbit
+movement, Vibrato and Tremolo, Delay and Chorus to the main
+tempo or to let them run on their own. When an element is synchronized, it
+snaps to the closest time signature.
+The LED next to the Tap button indicates the current tempo and the tempo can
+be changed by tapping the button several times. See the Tempo section for
+more details.
+The Focus button temporarily disables the Orbiter movement and cycles
+through each the four Corners, making it easy to tweak the Corners’ synthesis
+parameters. The focus mode is indicated by the associated LED and can be
+exited by holding the Focus button longer.
+When the Corner Matrix is displayed, the focus mode cycles through the
+four Corners. When the Orbiter is displayed, the focus mode has an
+additional step in which the Orbiter is collapsed and placed in the middle of
+the screen.
+The additional step is useful to temporarily bypass the Orbiter and perform the
+movement manually.
+          
