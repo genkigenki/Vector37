@@ -2,7 +2,8 @@
 // Copyright (C) 2026 M. Geisler (makkuro)
 // The simulator's wasm in Node, as the worklet runs it: boots silent, a chord sounds (audio, the orbit on the screen,
 // the pads follow the corners), a corner knob and pad do their job, a held button lends the knobs its set, < > the
-// sounds; cost against real time; the screen to OUT.ppm.
+// sounds; cost against real time; the screen to OUT.ppm; then the sound list (PATCH: the banks, a FACTORY 2 sound, a
+// pad held: SAVE), BT's SETUP, and the store given back after a restart (as the page keeps it).
 //   node web/sim/sim_test.mjs build/sim/sim.wasm [OUT.ppm]
 import fs from "fs";
 const bytes = fs.readFileSync(process.argv[2] || "build/sim/sim.wasm");
@@ -70,6 +71,38 @@ if (process.argv[3]) {
     out[3 * i] = ((c >> 11) & 31) * 255 / 31; out[3 * i + 1] = ((c >> 5) & 63) * 255 / 63; out[3 * i + 2] = (c & 31) * 255 / 31;
   }
   fs.writeFileSync(process.argv[3], Buffer.concat([Buffer.from("P6\n240 240\n255\n"), out]));
+}
+{   // the sound list (PATCH): the banks with < >, a FACTORY 2 sound from its pad, a pad held: SAVE into USER, kept
+  const snd = () => { const v = ex.sim_sound(); return { list: v >>> 24, lbank: (v >> 16) & 255, bank: (v >> 8) & 255, slot: v & 255 }; };
+  tap(12); run(0.3);
+  check("PATCH: the sound list open, its light", snd().list === 1 && ((ex.sim_leds() >> 12) & 1) === 1);
+  tap(3); tap(3); run(0.2);
+  check("... > > : FACTORY, USER, FACTORY 2 shown", snd().lbank === 2);
+  ex.sim_pad(0, 110); run(0.05); ex.sim_pad(0, 0); run(0.2);
+  check("... pad 1: FACTORY 2's first sound (17)", snd().bank === 2 && snd().slot === 0);
+  peak = 0;
+  ex.sim_key(19, 1); run(1.5); ex.sim_key(19, 0); run(0.3);
+  check(`... it plays (peak ${peak.toFixed(2)})`, peak > 0.05 && peak <= 1.0);
+  const empty = ex.sim_store_size(), st0 = new Uint8Array(ex.memory.buffer, ex.sim_store(), empty).slice();
+  ex.sim_pad(4, 110); run(1.3); ex.sim_pad(4, 0); run(0.2);
+  const st1 = new Uint8Array(ex.memory.buffer, ex.sim_store(), empty).slice();
+  check("... pad 5 held 1 s: SAVED into U5, the USER bank shown", snd().bank === 1 && snd().slot === 4 && snd().lbank === 1
+        && st1.some((x, i) => x !== st0[i]));
+  tap(11); run(0.2);
+  check("BT: the SETUP set, its light", ((ex.sim_leds() >> 11) & 1) === 1);
+  // the next visit: a new unit given the kept store, then a power cycle; U5 is there
+  const { instance: i2 } = await WebAssembly.instantiate(bytes, {});
+  const e2 = i2.exports;
+  if (e2._initialize) e2._initialize();
+  e2.sim_init();
+  new Uint8Array(e2.memory.buffer, e2.sim_store(), empty).set(st1);
+  e2.sim_restart();
+  const r2 = (sec) => { for (let i = 0; i < Math.round(sec * 44100 / 128); i++) e2.sim_render(128); };
+  const t2 = (b) => { e2.sim_button(b, 1); r2(0.05); e2.sim_button(b, 0); r2(0.05); };
+  r2(0.3); t2(12); r2(0.3); t2(3); r2(0.2);
+  e2.sim_pad(4, 110); r2(0.05); e2.sim_pad(4, 0); r2(0.2);
+  const v2 = e2.sim_sound();
+  check("the store kept (the page's localStorage): after a restart U5 plays", ((v2 >> 8) & 255) === 1 && (v2 & 255) === 4);
 }
 console.log(fails ? `sim: ${fails} FAILED` : "sim: all ok");
 process.exit(fails ? 1 : 0);

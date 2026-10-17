@@ -10,6 +10,16 @@
 static float out_l[1024], out_r[1024];
 
 EXPORT void sim_init(void) { panel_init(); }
+/* the store (your sounds, the settings): the simulated flash's data area, kept by the page (localStorage) and given
+ * back at the next visit: sim_init(), the saved bytes into sim_store(), then sim_restart() (a power cycle: the store
+ * kept, read as at boot) */
+EXPORT uint8_t *sim_store(void) { return panel_nor + 0x9D000u; }
+EXPORT uint32_t sim_store_size(void) { return 0xBB000u - 0x9D000u; }
+EXPORT void sim_restart(void) { panel_init(); }
+EXPORT uint32_t sim_sound(void)   /* (tests) the list open << 24, the bank shown << 16, the sound's bank << 8, its slot */
+{
+    return (uint32_t)ui.list << 24 | (uint32_t)ui.lbank << 16 | (uint32_t)ui.bank << 8 | ui.preset;
+}
 EXPORT float *sim_out_l(void) { return out_l; }
 EXPORT float *sim_out_r(void) { return out_r; }
 EXPORT uint32_t sim_rate(void) { return FS; }
