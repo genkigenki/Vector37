@@ -2,6 +2,8 @@
 
 # Vector37
 
+**Watch it:** [Vector37 0.3 on YouTube](https://youtu.be/gr2IwKLuwZo) · **Try it:** [in your browser](https://genkigenki.github.io/smk37/vector37-sim/) · **Install:** <https://genkigenki.github.io/smk37/#fw-vector37>
+
 ![Vector37 playing](docs/img/orbit.webp)
 
 **An orbiting overtone synth for the M-Vave SMK-37** (and, experimental, the FM-1).
