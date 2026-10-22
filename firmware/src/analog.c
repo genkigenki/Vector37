@@ -37,8 +37,8 @@ static inline void master_out(int32_t *l, int32_t *r)
         mst.env -= ((mst.env - LIM_T) >> 12) + 1;
     if (mst.env > LIM_T) {
         int32_t g = (int32_t)(((uint32_t)LIM_T << 15) / (uint32_t)mst.env);
-        *l = ((*l >> 4) * g) >> 11;
-        *r = ((*r >> 4) * g) >> 11;
+        *l = (int32_t)(((int64_t)*l * g) >> 15);   /* (64-bit: no 4 bits dropped before the gain) */
+        *r = (int32_t)(((int64_t)*r * g) >> 15);
         syn.overs++;
     }
     *l = sat(*l);

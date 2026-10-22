@@ -92,7 +92,9 @@ static void synth_block(int32_t *out, uint32_t n)
     }
     fx_run(bus_l, bus_r);
     for (i = 0; i < CTL; i++) {
-        int32_t l = (bus_l[i] >> 5) * vol >> 9, r = (bus_r[i] >> 5) * vol >> 9, a, b;   /* (headroom: the bus to 1e6) */
+        /* the volume on the full bus (64-bit product, rounded): no bits dropped before it (the bus >> 5 first
+         * left a step of vol / 512 output units: soft notes and tails on a ~11-bit grid) */
+        int32_t l = (int32_t)(((int64_t)bus_l[i] * vol + 8192) >> 14), r = (int32_t)(((int64_t)bus_r[i] * vol + 8192) >> 14), a, b;
         master_out(&l, &r);
 #if PANEL_MASTER
         l = (l * panel_master_q12) >> 12, r = (r * panel_master_q12) >> 12;   /* (the FM-1's MASTER pot) */
