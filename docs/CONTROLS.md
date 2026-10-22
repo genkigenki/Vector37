@@ -117,7 +117,9 @@ knobs' other sets (a tap: the set stays open until the button is tapped again).
 | FADER BANK: MORE | TUNE 1 | TRACK | FILTER | DRIVE COLOUR | CHORUS DEPTH | CHORUS SPEED | REVERB COLOUR | AUDITION (on / off) |
 | SCALE: WAVE (a planet selected) | WT POS 1 | WT ORBIT 1 | WT POS 2 | WT ORBIT 2 | | | | |
 | ARP | MODE | BPM | ORBIT ATTACK | ORBIT DECAY | ORBIT SUSTAIN | ORBIT RELEASE | BEND RANGE | TRS MIDI OUT (OFF, CH1 .. CH16) |
-| BT: SETUP | TRS MIDI OUT (OFF, CH1 .. CH16) | MIDI IN (OMNI, CH1 .. CH16: USB MIDI) | PAD LIGHT (1 .. 8) | START SOUND (at power-on: FACTORY 1 .. 16, USER U1 .. U16, FACTORY 2 17 .. 32; an empty USER slot: the factory sound of that number) | | | | |
+| BT: SETUP | TRS MIDI OUT (OFF, CH1 .. CH16) | MIDI IN (OMNI, CH1 .. CH16: USB MIDI) | PAD LIGHT (25 %, 50 %, 75 %, 100 %; at first 75 %: the bright pads follow it, the dim ones keep most of their light, every pad stays visible) | START SOUND (at power-on: FACTORY 1 .. 16, USER U1 .. U16, FACTORY 2 17 .. 32; an empty USER slot: the factory sound of that number) | | | | |
+
+![BT: the SETUP set, PAD LIGHT turned to 25 %](img/screen-setup-pad-light.png)
 
 ## Wavetables (W1..W8)
 
@@ -167,7 +169,7 @@ Three banks of sixteen, one sound a pad: FACTORY (1 .. 16) and FACTORY 2 (17 .. 
 never change), and USER, sixteen slots of yours. PATCH opens the sound list: the bank shown (< > or K1: the others in
 turn, FACTORY, USER, FACTORY 2), its sixteen slots in two columns
 as the pads lie (left: the top pads 1-8, right: the bottom pads 9-16), the sound now marked, empty USER slots dim
-(EMPTY). The pads are lit in the bank's colour, the sound now bright, empty USER slots dark:
+(EMPTY). The pads are lit in the bank's colour, the sound now bright, the others dim, empty USER slots pale (still lit):
 
 | FACTORY | | | |
 | --- | --- | --- | --- |

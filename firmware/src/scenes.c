@@ -8,7 +8,7 @@
 #define SET_MAGIC 0x56335331u              /* "V3S1" */
 typedef struct {
     uint32_t magic;
-    uint8_t bright;                        /* pad LEDs 1..8 */
+    uint8_t bright;                        /* PAD LIGHT 2, 4, 6, 8 = 25 .. 100 % (0.3.1: 1..8, read as (b + 1) / 2) */
     uint8_t console;                       /* USB serial console (CDC) */
     uint8_t preset;                        /* the sound at power-on: 0..15 FACTORY 1..16, 16..31 USER 1..16, 32..47
                                               FACTORY 2 17..32 (an older record: 0..31, the same) */
@@ -18,7 +18,7 @@ typedef struct {
     uint8_t rsv[6];
 } settings_t;
 _Static_assert(sizeof(settings_t) == 16u, "settings: the 0.2 record's size");
-static settings_t settings = {SET_MAGIC, 5, 1, 0, 0, 0, 0, {0}};
+static settings_t settings = {SET_MAGIC, 6, 1, 0, 0, 0, 0, {0}};   /* (PAD LIGHT 75 %) */
 
 static int flash_probe(void);              /* the JEDEC id (vector37.c; the host tests: a simulated part) */
 static uint8_t store_on;                   /* the SMK store is ours (boot): saving possible */
@@ -119,7 +119,8 @@ static void persist_boot(void)
     if (st_load(OBJ_SETTINGS, &s, sizeof s) == (int)sizeof s && s.magic == SET_MAGIC) {
         settings = s;
         if (settings.bright < 1u || settings.bright > 8u)
-            settings.bright = 5;
+            settings.bright = 6;
+        settings.bright = (uint8_t)((settings.bright + 1u) / 2u * 2u);   /* (0.3.1's 1..8: the step above) */
         if (settings.preset >= 3u * NPRESET)
             settings.preset = 0;
         settings.trs_ch &= 15u;

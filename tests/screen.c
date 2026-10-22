@@ -1192,6 +1192,72 @@ int main(int argc, char **argv)
         check("the moon's trail at full speed: connected along its way (no piece over 3 pixels), nothing left behind",
               gap <= 48u && nmin > 40u && loops > 0u && stale == 0u);
     }
+    /* PAD LIGHT (at the end: the screens before keep their time) */
+        {   /* PAD LIGHT (K3): 25, 50, 75, 100 %; at every step each state stays visible (the dimmest, an empty USER
+             * slot, >= 60 % of its light at 100 % and >= 8) and apart from the next (a selected corner over an
+             * unselected one, an unselected one / another sound over an empty slot: >= 1.5 x); at 100 % the levels
+             * as they are. In each group's colour and the muted red. */
+            static const uint32_t LV[3] = {PK_FULL, PK_DIM, PK_EMPTY};
+            const uint8_t *cols[5] = {GCOL[0], GCOL[1], GCOL[2], GCOL[3], MUTED_COL};
+            uint32_t step, ci, j, vis = 1, apart = 1, ident = 1, real = 1, worst = 255, ratio = 999;
+            tap(B_BT);
+            panel_ms(100);
+            check("SETUP K3: PAD LIGHT 75 % at first (the 0.3.1 default 5: 75 %)", ui.layer == L_SETUP && settings.bright == 6u);
+            panel_enc(2, -6);
+            panel_ms(150);
+            for (step = 1; step <= 4u; step++) {
+                if (step > 1u)
+                    panel_enc(2, 1), panel_ms(150);
+                real &= settings.bright == 2u * step && (pad_rgb[padof(PG_SELECT, 1)] & 255u) >= 8u;   /* (an unselected
+                                                                                          corner, blue, on the pads) */
+                if (step == 1u)
+                    shot("setup_padlight_25");
+                for (ci = 0; ci < 5u; ci++) {
+                    uint32_t got[3], base[3];
+                    for (j = 0; j < 3u; j++) {
+                        const uint8_t *c = cols[ci];
+                        uint32_t r = c[0] * LV[j] * PK_SC >> 16, g = c[1] * LV[j] * PK_SC >> 16, bl = c[2] * LV[j] * PK_SC >> 16;
+                        pad_k(15, c, LV[j]);
+                        got[j] = pad_rgb[15];
+                        if (step == 4u)
+                            ident &= got[j] == (r << 16 | g << 8 | bl);
+                        base[j] = r > g ? r : g, base[j] = base[j] > bl ? base[j] : bl;
+                        got[j] = (got[j] >> 16 & 255) > (got[j] >> 8 & 255) ? got[j] >> 16 & 255 : got[j] >> 8 & 255,
+                        got[j] = got[j] > (pad_rgb[15] & 255) ? got[j] : pad_rgb[15] & 255;
+                    }
+                    vis &= got[2] >= 8u && got[2] * 10u >= base[2] * 6u;
+                    apart &= got[0] * 2u >= got[1] * 3u && got[1] * 2u >= got[2] * 3u;
+                    worst = got[2] < worst ? got[2] : worst;
+                    ratio = got[1] * 100u / got[2] < ratio ? got[1] * 100u / got[2] : ratio;
+                }
+            }
+            printf("  info PAD LIGHT: the dimmest state's brightest LED >= %u of 255, dim / empty >= %u.%02u x\n",
+                   worst, ratio / 100u, ratio % 100u);
+            check("... K3 steps 25, 50, 75, 100 % (kept as 2, 4, 6, 8); an unselected corner lit on the pads", real);
+            check("... the dimmest state visible at every step (>= 60 % of its 100 % light, >= 8)", vis);
+            check("... each state apart from the next at every step (>= 1.5 x)", apart);
+            check("... 100 %: the levels unchanged", ident);
+            shot("setup_padlight_100");
+            panel_enc(2, -1);                      /* (back to 75 %) */
+            panel_ms(150);
+            tap(B_BT);
+            panel_ms(100);
+        }
+        {   /* PAD LIGHT from an older record: 0.3.1's 1..8 read as the step above (5, its default: 75 %) */
+            static const uint8_t OLD[8] = {1, 2, 3, 4, 5, 6, 7, 8}, NEW[8] = {2, 2, 4, 4, 6, 6, 8, 8};
+            uint32_t i, ok = 1;
+            for (i = 0; i < 8u; i++) {
+                settings.bright = OLD[i];
+                settings_save();
+                settings.bright = 0;
+                memset(&usr, 0, sizeof usr);
+                persist_boot();
+                ok &= settings.bright == NEW[i];
+            }
+            check("PAD LIGHT: a 0.3.1 record's 1..8 -> 25, 25, 50, 50, 75, 75, 100, 100 %", ok);
+            settings.bright = 6;
+            settings_save();
+        }
     printf(fails ? "screen: %d FAILED\n" : "screen: all ok\n", fails);
     return fails != 0;
 }

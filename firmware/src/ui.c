@@ -40,7 +40,7 @@ enum { S_TRS, S_MIDIIN, S_BRIGHT, S_START, S_N };   /* the settings on a knob (s
 static const pdesc_t SDESC[S_N] = {
     [S_TRS] = {"TRS MIDI OUT", 0, 16, 1, F_NUM, 0},    /* the 3.5 mm jack: OFF, or the channel (smk_midi_out.h) */
     [S_MIDIIN] = {"MIDI IN", 0, 16, 0, F_NUM, 0},      /* USB MIDI in: OMNI, or that channel only */
-    [S_BRIGHT] = {"PAD LIGHT", 1, 8, 5, F_NUM, 0},
+    [S_BRIGHT] = {"PAD LIGHT", 1, 4, 3, F_NUM, 0},     /* 25, 50, 75, 100 % (scenes.c keeps it as 2, 4, 6, 8) */
     [S_START] = {"START SOUND", 0, 3 * NPRESET - 1, 0, F_NUM, 0},   /* the sound at power-on: FACTORY 1..16, USER,
                                                                        FACTORY 2 17..32 (scenes.c) */
 };
@@ -216,7 +216,7 @@ static int32_t set_get(uint32_t id)
     case S_MIDIIN:
         return settings.midi_in;
     case S_BRIGHT:
-        return settings.bright;
+        return (settings.bright + 1) / 2;
     default:
         return settings.preset;
     }
@@ -283,8 +283,10 @@ static void knob_text(uint32_t k, const char **label, char *val, uint32_t n)
         if (d->id == S_START)
             slot_label(val, n, (uint32_t)v / NPRESET, (uint32_t)v % NPRESET);   /* (USER: "U3 ...", or EMPTY: then
                                                                                     the factory sound at power-on) */
-        else if (d->id == S_BRIGHT)
-            fmt_int(val, v);
+        else if (d->id == S_BRIGHT) {
+            static const char *const PL_TXT[4] = {"25%", "50%", "75%", "100%"};
+            str_cpy(val, PL_TXT[clamp(v, 1, 4) - 1], n);
+        }
         else {
             fmt_int(nb + 2, v);
             str_cpy(val, !v ? (d->id == S_TRS ? "OFF" : "OMNI") : d->id == S_TRS && smo.dead ? "NOT SENDING" : nb, n);
@@ -484,7 +486,7 @@ static void set_turn(uint32_t id, int32_t s)
         if (id == S_MIDIIN)
             settings.midi_in = (uint8_t)v, ev_push(EV_ALLOFF, 0, 0);   /* (notes of the old channel: off) */
         else if (id == S_BRIGHT)
-            settings.bright = (uint8_t)v;
+            settings.bright = (uint8_t)(2 * v);
         else
             settings.preset = (uint8_t)v;
     }
@@ -1153,29 +1155,59 @@ static void midi_poll(void)
  * purple; MUTE green, a muted corner red */
 static const uint8_t GCOL[4][3] = {{40, 110, 255}, {255, 120, 0}, {170, 40, 255}, {40, 255, 80}};
 static const uint8_t MUTED_COL[3] = {255, 0, 0};
+/* the pads' levels (of 256 of the colour, at 100 % ~0.39 of the LEDs' full drive): a selected corner, the sound now,
+ * a pad held in the list; the MODE, FILTER and MUTE groups; a muted corner (red); an unselected corner, the other
+ * sounds; an empty USER slot (pale, still lit) */
+enum { PK_FULL = 256, PK_MID = 150, PK_MUTED = 110, PK_DIM = 60, PK_EMPTY = 32 };
+#define PK_SC 100u                                 /* (the 0.3.1 PAD LIGHT 8: the LEDs at most ~39 %) */
 #if BOARD_SMK37
+
+/* PAD LIGHT (SETUP): 25, 50, 75 or 100 %. The bright states follow it, the dim ones keep most of their light, so at
+ * every step each state stays visible and apart from the next: a colour's brightest component v is scaled by
+ * s + (1 - s) * K / (v + K), s the step, K = PL_KNEE the dim states' level at 100 % (an unselected corner). At 25 %
+ * a pad at K keeps 62.5 % of its light, a full one ~39 %; at 100 % nothing changes. A lit component stays lit. */
+#define PL_KNEE 23u
+static uint32_t pl_c(uint32_t c, uint32_t gain)
+{
+    uint32_t o = (c * gain + 128u) >> 8;
+    return c && !o ? 1u : o;
+}
+static void pad_light(uint32_t pad, uint32_t r, uint32_t g, uint32_t b)
+{
+    uint32_t s = (uint32_t)(settings.bright + 1u) / 2u * 64u, v = r > g ? r : g, gain;
+    v = v > b ? v : b;
+    if (v && s < 256u) {
+        gain = s + (256u - s) * PL_KNEE / (v + PL_KNEE);
+        r = pl_c(r, gain), g = pl_c(g, gain), b = pl_c(b, gain);
+    }
+    padled_set(pad, (uint8_t)r, (uint8_t)g, (uint8_t)b);
+}
+static void pad_k(uint32_t pad, const uint8_t *col, uint32_t k)   /* a pad: its colour at level k (of 256) */
+{
+    pad_light(pad, col[0] * k * PK_SC >> 16, col[1] * k * PK_SC >> 16, col[2] * k * PK_SC >> 16);
+}
 static void ui_leds(void)
 {
-    uint32_t pad, sc = 4u + settings.bright * 12u;  /* pad brightness of 256 */
+    uint32_t pad;
     for (pad = 0; pad < 16u; pad++) {
-        uint32_t grp = (pad & 7u) >> 1, c = (pad & 1u) | (pad >= 8u ? 2u : 0u), k = 150;
+        uint32_t grp = (pad & 7u) >> 1, c = (pad & 1u) | (pad >= 8u ? 2u : 0u), k = PK_MID;
         const uint8_t *col = GCOL[grp];
         if (ui.list) {                             /* the sound list: a slot per pad (the sound now bright; USER: the
-                                                      saved ones lit, empty ones dark) */
+                                                      saved ones lit, empty ones pale) */
             static const uint8_t LCOL[NBANK][3] = {{255, 200, 90}, {80, 200, 255}, {255, 120, 200}};   /* (by bank) */
             col = LCOL[ui.lbank % NBANK];
-            k = pad >= NPRESET ? 0u : ui.lbank == ui.bank && pad == ui.preset ? 256u
-                : ui.lbank == BK_USER && !usr_has(pad) ? 8u : 50u;
+            k = pad >= NPRESET ? 0u : ui.lbank == ui.bank && pad == ui.preset ? PK_FULL
+                : ui.lbank == BK_USER && !usr_has(pad) ? PK_EMPTY : PK_DIM;
             if (pad < NPRESET && ((ui.lpad >> pad) & 1u))
-                k = 256u;
-            padled_set(pad, (uint8_t)(col[0] * k * sc >> 16), (uint8_t)(col[1] * k * sc >> 16), (uint8_t)(col[2] * k * sc >> 16));
+                k = PK_FULL;
+            pad_k(pad, col, k);
             continue;
         }
         if (grp == PG_SELECT)
-            k = (ui.sel >> c) & 1u ? 256u : 60u;
+            k = (ui.sel >> c) & 1u ? PK_FULL : PK_DIM;
         else if (grp == PG_MUTE && pt.c[c][CP_MUTE])
-            col = MUTED_COL, k = 110;
-        padled_set(pad, (uint8_t)(col[0] * k * sc >> 16), (uint8_t)(col[1] * k * sc >> 16), (uint8_t)(col[2] * k * sc >> 16));
+            col = MUTED_COL, k = PK_MUTED;
+        pad_k(pad, col, k);
     }
     fm1_led_key(B_ARP, ui.layer == L_ARP || (pt.g[G_ARP] && fm1_ms % 1000u < 500u));   /* (its set lit; running: blinks) */
     fm1_led_key(B_REPEAT, pt.g[G_RETRIG] != 0);

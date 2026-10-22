@@ -144,7 +144,16 @@ global settings, MIDI clock.
   85 % of its time and raises it again after 2.3 s under 55 %.
 - **After the voices:** drive (band-pass into tanh beside the dry), chorus (four moving taps, stereo), delay
   (ping-pong, tempo divisions 1/16 .. 3/4 up to 0.74 s, darkening repeats; full feedback: a loop), the plate reverb
-  (Dattorro, half rate), volume, then the master from Melodee37 (DC blocker, peak limiter, soft clip).
+  (Dattorro, half rate), volume, then the master from Melodee37 (DC blocker, peak limiter, soft clip). The volume
+  is one 64-bit product on the full bus, rounded, and the limiter's gain one 64-bit product too (0.3.2; before, the
+  bus was shifted right by 5 first: soft notes and reverb tails sat on an ~11-bit grid, a released note left a
+  truncation residue). ~10 instructions more a stereo sample, ~0.4 M a second.
+- **Pad light** (SETUP K3, PAD LIGHT 25 / 50 / 75 / 100 %, at first 75 %): the pads' levels (ui.c PK_*) at 100 %
+  are 0.3.1's PAD LIGHT 8; a step scales a colour's brightest component v by s + (1 - s) * K / (v + K) (K = PL_KNEE,
+  an unselected corner's level), so the bright states follow the setting and the dim ones keep most of their light:
+  at 25 % the dimmest pad (an empty USER slot) keeps ~75 % of its light (9 of 255), a dim one stays ~1.5 x it and a
+  full one ~2.8 x a dim one (tests/screen.c checks every step). 0.3.1's 1..8 are read as the step above (kept as 2,
+  4, 6, 8: 0.3.1 reads the same record). The console's padtest sets the LEDs as given (a hardware check).
 
 ## The screen (firmware/src/draw.c)
 
@@ -261,6 +270,8 @@ four different filter types) ~650; the effects and the master ~620. Eight voices
 typical, ~260 M worst. At an assumed 320 MHz (the JieLi SDK's usual system clock; our package does not set one) and
 about one instruction a cycle: ~53 % typical, ~80 % worst; at 240 MHz the typical case is ~70 %. The CPU guard keeps
 the worst case playable by dropping voices. Host: eight voices + effects cost 1.2 % of real time on a desktop CPU.
+0.3.2's volume and limiter (64-bit, rounded): the output loop ~10 instructions more a stereo sample (~0.4 M a second,
+~0.1 % at 320 MHz); host 1.3 % against 1.4 % for 0.3.1 (best of three, the same machine): no difference measurable.
 A wavetable generator per sample: two table reads and the morph, ~40-54 instructions in the firmware's loops
 (build/vector37.dis) against ~16-27 for an overtone pattern: a sound with a wavetable in every corner's GEN 1 costs
 ~100 instructions a sample more per voice (8 voices: ~35 M a second more); every generator a wavetable (8 voices) the

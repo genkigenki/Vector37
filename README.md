@@ -16,7 +16,7 @@ Thirty-two factory sounds in two banks (FACTORY, and FACTORY 2: the basics, pads
 basses, sequences, brass, a lead, wind and drums, each a whole scene) and a USER bank of sixteen of yours, one a pad:
 PATCH opens the sound list (a pad: play; held 1 s: SAVE there; < > the sounds of the bank). Wavetables: each generator can read one of eight banks of 32 frames, and the moon moves its
 place as it nears the planet (SCALE: the WAVE knobs). The 3.5 mm MIDI jack sends the keys and wheels as played
-(TRS MIDI OUT; BT, the SETUP set: its channel, the USB MIDI IN channel, the pad light, the sound at power-on). The knob
+(TRS MIDI OUT; BT, the SETUP set: its channel, the USB MIDI IN channel, the pad light 25 .. 100 %, the sound at power-on). The knob
 sets (CHORD, FX, FADER BANK, ARP, SCALE, BT) open with a
 tap and stay open until tapped again.
 Unofficial firmware, not affiliated with or endorsed by M-Vave. Install at your own risk.

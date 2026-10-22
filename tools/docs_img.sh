@@ -32,6 +32,7 @@ keep = {"orbit_playing": "orbit", "orbit_idle": "orbit-idle", "knob_cutoff": "kn
         "fm1_page1_blend": "fm1-planet", "fm1_hold_fx": "fm1-hold-fx", "fm1_path_family": "fm1-path",
         "wt_overview": "wt-overview", "hold_scale_wave": "hold-scale-wave",
         "list_factory": "sounds-factory", "list_factory2": "sounds-factory2", "list_saved": "sounds-user",
+        "setup_padlight_25": "setup-pad-light",
         }
 for k, v in keep.items():
     Image.open(os.path.join(t, "s", k + ".ppm")).resize((480, 480), Image.NEAREST).save(os.path.join(out, "screen-" + v + ".png"))

@@ -6,7 +6,7 @@
  * BOARD_SMK37 1: the SMK-37 (build.py, the default); 0: the FM-1 (BOARD=fm1, experimental: its panel is
  * panel_fm1.c, no store, MASTER a pot, no TRS MIDI OUT). */
 #include <stdint.h>
-#define MK_VERSION "0.3.1"
+#define MK_VERSION "0.3.2"
 #define BRAND_NAME "VECTOR37"
 #define BRAND_CRASH "VECTOR37 CRASH"
 #define BRAND_RESCUE "VECTOR37 USB RESCUE"
