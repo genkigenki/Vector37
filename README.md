@@ -84,3 +84,5 @@ Board layer from SLOOP by isod89, based on Felucca by Leo Kuroshita. Master stag
 ref/ holds the Vector manual for reference only (CC BY-SA 4.0, Beetlecrab s.r.o.); it is not part of the firmware.
 
 By genkigenki. Licence: GPL-3.0 (see [LICENSE](LICENSE)).
+
+You can also try Vector37 in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
